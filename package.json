@@ -1,0 +1,45 @@
+{
+  "name": "flock",
+  "version": "0.1.0",
+  "description": "A small open-source CLI for orchestrating multi-agent Claude Code swarms. Filesystem-coordinated, no GUI, no MCP, no subscription.",
+  "type": "module",
+  "bin": {
+    "flock": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "src/prompts/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && npm run copy-assets && chmod +x dist/cli.js dist/hook.cjs",
+    "copy-assets": "node -e \"const fs=require('fs'),path=require('path');fs.mkdirSync('dist/prompts',{recursive:true});for(const f of fs.readdirSync('src/prompts'))fs.copyFileSync(path.join('src/prompts',f),path.join('dist/prompts',f));fs.copyFileSync('src/hook.cjs','dist/hook.cjs');\"",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/cli.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "swarm",
+    "multi-agent",
+    "cli",
+    "orchestration"
+  ],
+  "author": "Ridham Khandar",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1",
+    "nanoid": "^5.0.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}

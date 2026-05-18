@@ -1,0 +1,262 @@
+/**
+ * Top-level swarm lifecycle: create, resume, stop, status.
+ *
+ * Bootstraps the .swarm/<id>/ directory, writes the canonical SWARM_BOARD,
+ * spawns agents with role-specific prompts, and provides resume / kill paths.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { customAlphabet } from 'nanoid';
+
+import type {
+  AgentRuntime,
+  AgentSpec,
+  SwarmConfig,
+  SwarmPaths,
+} from './types.js';
+import { swarmPaths, builtinRolesDir, userRolesDir, findActiveSwarm } from './paths.js';
+import { generateBoard } from './board.js';
+import { ensureInboxes } from './mailbox.js';
+import {
+  spawnAgent,
+  isAlive,
+  killProcess,
+  readPid,
+  clearPid,
+} from './spawn.js';
+import { installHooks, uninstallHooks } from './hooks.js';
+
+// Short, URL-safe swarm IDs: 10 lowercase alnum chars, e.g. "k3p9xq2a7m"
+const newId = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 10);
+
+export interface CreateOptions {
+  goal: string;
+  workspaceRoot: string;
+  /** Role roster — defaults to 1 coordinator, 2 builders, 1 reviewer */
+  agents?: AgentSpec[];
+}
+
+export const DEFAULT_AGENTS: AgentSpec[] = [
+  { label: 'Coordinator 1', role: 'coordinator' },
+  { label: 'Builder 1', role: 'builder' },
+  { label: 'Builder 2', role: 'builder' },
+  { label: 'Reviewer 1', role: 'reviewer' },
+];
+
+export interface CreateResult {
+  config: SwarmConfig;
+  paths: SwarmPaths;
+  pids: Record<string, number>;
+}
+
+export function createSwarm(opts: CreateOptions): CreateResult {
+  const agents = opts.agents ?? DEFAULT_AGENTS;
+  const id = newId();
+  const config: SwarmConfig = {
+    id,
+    goal: opts.goal,
+    workspaceRoot: path.resolve(opts.workspaceRoot),
+    agents,
+    createdAt: new Date().toISOString(),
+  };
+
+  const paths = swarmPaths(config.workspaceRoot, id);
+  bootstrapDirs(paths);
+  fs.writeFileSync(paths.configFile, JSON.stringify(config, null, 2));
+  fs.writeFileSync(paths.agentsFile, JSON.stringify(agents, null, 2));
+  fs.writeFileSync(paths.boardFile, generateBoard(config));
+  ensureInboxes(paths, agents);
+
+  installHooks(config.workspaceRoot);
+
+  const pids: Record<string, number> = {};
+  for (const agent of agents) {
+    const prompt = resolvePrompt(agent, config);
+    const pid = spawnAgent({ swarm: config, paths, agent, prompt });
+    pids[agent.label] = pid;
+  }
+
+  return { config, paths, pids };
+}
+
+export interface ResumeOptions {
+  workspaceRoot: string;
+  /** Optional swarm id; if omitted, use the most-recently-touched swarm */
+  swarmId?: string;
+}
+
+export interface ResumeResult {
+  config: SwarmConfig;
+  respawned: string[];
+  alreadyRunning: string[];
+}
+
+/**
+ * Re-spawn any agents whose pidfile is missing or whose process has died.
+ * Agents that are still alive are left alone.
+ */
+export function resumeSwarm(opts: ResumeOptions): ResumeResult {
+  const config = loadConfig(opts.workspaceRoot, opts.swarmId);
+  const paths = swarmPaths(config.workspaceRoot, config.id);
+
+  // Make sure hooks are wired (idempotent — covers the case where the user
+  // ran `flock hooks uninstall` between sessions).
+  installHooks(config.workspaceRoot);
+
+  const respawned: string[] = [];
+  const alreadyRunning: string[] = [];
+
+  for (const agent of config.agents) {
+    const pid = readPid(paths, agent.label);
+    if (pid && isAlive(pid)) {
+      alreadyRunning.push(agent.label);
+      continue;
+    }
+    clearPid(paths, agent.label);
+    const prompt = resolvePrompt(agent, config);
+    spawnAgent({ swarm: config, paths, agent, prompt, resume: true });
+    respawned.push(agent.label);
+  }
+  return { config, respawned, alreadyRunning };
+}
+
+export interface StopOptions {
+  workspaceRoot: string;
+  swarmId?: string;
+  /** If true, leave hooks installed; default removes them */
+  keepHooks?: boolean;
+}
+
+export interface StopResult {
+  config: SwarmConfig;
+  killed: string[];
+}
+
+/**
+ * Kill every agent in the swarm, optionally uninstall hooks. Does NOT
+ * delete the .swarm/<id>/ directory — the operator may want the board /
+ * GAP_ANALYSIS / logs preserved.
+ */
+export function stopSwarm(opts: StopOptions): StopResult {
+  const config = loadConfig(opts.workspaceRoot, opts.swarmId);
+  const paths = swarmPaths(config.workspaceRoot, config.id);
+
+  const killed: string[] = [];
+  for (const agent of config.agents) {
+    const pid = readPid(paths, agent.label);
+    if (pid && isAlive(pid)) {
+      killProcess(pid, 'SIGTERM');
+      killed.push(agent.label);
+    }
+    clearPid(paths, agent.label);
+  }
+
+  if (!opts.keepHooks) {
+    uninstallHooks(config.workspaceRoot);
+  }
+  return { config, killed };
+}
+
+export interface StatusReport {
+  config: SwarmConfig;
+  agents: AgentRuntime[];
+}
+
+export function getStatus(workspaceRoot: string, swarmId?: string): StatusReport {
+  const config = loadConfig(workspaceRoot, swarmId);
+  const paths = swarmPaths(config.workspaceRoot, config.id);
+
+  const agents: AgentRuntime[] = config.agents.map((spec) => {
+    const pid = readPid(paths, spec.label);
+    const alive = pid !== null && isAlive(pid);
+    const statusFile = path.join(paths.statusDir, `${spec.label}.json`);
+    let status: AgentRuntime['status'] = alive ? 'spawning' : 'dead';
+    let lastSeen: number | undefined;
+    let detail: string | undefined;
+    if (fs.existsSync(statusFile)) {
+      try {
+        const rec = JSON.parse(fs.readFileSync(statusFile, 'utf8')) as {
+          status?: string; timestamp?: number; title?: string;
+        };
+        if (rec.status === 'working' || rec.status === 'idle' || rec.status === 'needs-input') {
+          status = alive ? rec.status : 'dead';
+        }
+        lastSeen = rec.timestamp;
+        detail = rec.title;
+      } catch {
+        // ignore
+      }
+    }
+    return {
+      ...spec,
+      pid: pid ?? undefined,
+      status,
+      lastSeen,
+      detail,
+    };
+  });
+
+  return { config, agents };
+}
+
+// ─── internals ───────────────────────────────────────────────────────────────
+
+function bootstrapDirs(paths: SwarmPaths): void {
+  for (const dir of [
+    paths.swarmDir,
+    paths.statusDir,
+    paths.inboxDir,
+    paths.pidsDir,
+    paths.logsDir,
+  ]) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+function loadConfig(workspaceRoot: string, swarmId?: string): SwarmConfig {
+  const id = swarmId ?? findActiveSwarm(workspaceRoot);
+  if (!id) {
+    throw new Error(
+      `No swarm found in ${workspaceRoot}. Run \`flock start "<goal>"\` first.`,
+    );
+  }
+  const configFile = swarmPaths(workspaceRoot, id).configFile;
+  if (!fs.existsSync(configFile)) {
+    throw new Error(`Swarm ${id} has no swarm.json — directory may be corrupted.`);
+  }
+  return JSON.parse(fs.readFileSync(configFile, 'utf8')) as SwarmConfig;
+}
+
+/**
+ * Resolve the prompt for an agent. Order of precedence:
+ *   1. ~/.config/flock/roles/<role>.md  (user override)
+ *   2. <package>/dist/prompts/<role>.md (built-in)
+ *
+ * Then perform variable substitution: {{label}}, {{role}}, {{goal}},
+ * {{swarm_id}}, {{board_path}}, {{agent_roster}}.
+ */
+function resolvePrompt(agent: AgentSpec, config: SwarmConfig): string {
+  const candidates = [
+    path.join(userRolesDir(), `${agent.role}.md`),
+    path.join(builtinRolesDir(), `${agent.role}.md`),
+  ];
+  const templatePath = candidates.find((p) => fs.existsSync(p));
+  if (!templatePath) {
+    throw new Error(
+      `No prompt template found for role "${agent.role}" — checked: ${candidates.join(', ')}`,
+    );
+  }
+  const template = fs.readFileSync(templatePath, 'utf8');
+  const roster = config.agents
+    .map((a) => `  - "${a.label}" (${a.role})`)
+    .join('\n');
+  return template
+    .replaceAll('{{label}}', agent.label)
+    .replaceAll('{{role}}', agent.role)
+    .replaceAll('{{goal}}', config.goal)
+    .replaceAll('{{swarm_id}}', config.id)
+    .replaceAll('{{board_path}}', path.relative(config.workspaceRoot, swarmPaths(config.workspaceRoot, config.id).boardFile))
+    .replaceAll('{{workspace_root}}', config.workspaceRoot)
+    .replaceAll('{{agent_roster}}', roster);
+}
