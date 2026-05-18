@@ -101,7 +101,7 @@ export function resumeSwarm(opts: ResumeOptions): ResumeResult {
   const paths = swarmPaths(config.workspaceRoot, config.id);
 
   // Make sure hooks are wired (idempotent — covers the case where the user
-  // ran `flock hooks uninstall` between sessions).
+  // ran `swarmly hooks uninstall` between sessions).
   installHooks(config.workspaceRoot);
 
   const respawned: string[] = [];
@@ -218,7 +218,7 @@ function loadConfig(workspaceRoot: string, swarmId?: string): SwarmConfig {
   const id = swarmId ?? findActiveSwarm(workspaceRoot);
   if (!id) {
     throw new Error(
-      `No swarm found in ${workspaceRoot}. Run \`flock start "<goal>"\` first.`,
+      `No swarm found in ${workspaceRoot}. Run \`swarmly start "<goal>"\` first.`,
     );
   }
   const configFile = swarmPaths(workspaceRoot, id).configFile;
@@ -230,7 +230,7 @@ function loadConfig(workspaceRoot: string, swarmId?: string): SwarmConfig {
 
 /**
  * Resolve the prompt for an agent. Order of precedence:
- *   1. ~/.config/flock/roles/<role>.md  (user override)
+ *   1. ~/.config/swarmly/roles/<role>.md  (user override)
  *   2. <package>/dist/prompts/<role>.md (built-in)
  *
  * Then perform variable substitution: {{label}}, {{role}}, {{goal}},

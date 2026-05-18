@@ -10,7 +10,7 @@ export function hooksInstallCommand(args: HookArgs): void {
   installHooks(root);
   console.log(pc.green('✓ hooks installed'));
   console.log(pc.dim(`  ${root}/.claude/settings.local.json`));
-  console.log(pc.dim('  hooks are gated on $FLOCK_AGENT_LABEL — non-flock sessions are unaffected.'));
+  console.log(pc.dim('  hooks are gated on $SWARMLY_AGENT_LABEL — non-swarmly sessions are unaffected.'));
 }
 
 export function hooksUninstallCommand(args: HookArgs): void {

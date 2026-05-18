@@ -24,7 +24,7 @@ export interface SpawnOptions {
 /**
  * Spawn an agent process. Returns the PID of the spawned `claude` process.
  *
- * The agent runs detached so it survives the lifetime of the `flock start`
+ * The agent runs detached so it survives the lifetime of the `swarmly start`
  * command. Stdout and stderr are redirected to log files for debugging.
  */
 export function spawnAgent(opts: SpawnOptions): number {
@@ -40,7 +40,7 @@ export function spawnAgent(opts: SpawnOptions): number {
 
   // The full first message includes the role prompt + a kickoff instruction.
   const firstMessage = resume
-    ? `${prompt}\n\n---\n\nflock restarted and is resuming this swarm. Re-read SWARM_BOARD.md, run flock mail check --consume --as "${agent.label}", and continue from the current board state.`
+    ? `${prompt}\n\n---\n\nswarmly restarted and is resuming this swarm. Re-read SWARM_BOARD.md, run swarmly mail check --consume --as "${agent.label}", and continue from the current board state.`
     : prompt;
 
   // We pipe stdin so we can deliver the initial message, then close.
@@ -49,10 +49,10 @@ export function spawnAgent(opts: SpawnOptions): number {
     cwd: swarm.workspaceRoot,
     env: {
       ...process.env,
-      FLOCK_SWARM_ID: swarm.id,
-      FLOCK_AGENT_LABEL: agent.label,
-      FLOCK_AGENT_ROLE: agent.role,
-      FLOCK_WORKSPACE_ROOT: swarm.workspaceRoot,
+      SWARMLY_SWARM_ID: swarm.id,
+      SWARMLY_AGENT_LABEL: agent.label,
+      SWARMLY_AGENT_ROLE: agent.role,
+      SWARMLY_WORKSPACE_ROOT: swarm.workspaceRoot,
     },
     detached: true,
     stdio: ['pipe', logStream, logStream],

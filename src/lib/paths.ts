@@ -1,9 +1,9 @@
 /**
- * Path resolution for flock.
+ * Path resolution for swarmly.
  *
  * Swarm state lives at <workspace>/.swarm/<id>/. Global config (role prompt
- * overrides) lives at ~/.config/flock/. We do NOT use ~/.flock to keep with
- * XDG conventions; users can override with $FLOCK_CONFIG_HOME if they want.
+ * overrides) lives at ~/.config/swarmly/. We do NOT use ~/.swarmly to keep with
+ * XDG conventions; users can override with $SWARMLY_CONFIG_HOME if they want.
  */
 
 import path from 'node:path';
@@ -11,14 +11,14 @@ import os from 'node:os';
 import fs from 'node:fs';
 import type { SwarmPaths } from './types.js';
 
-/** ~/.config/flock — or $FLOCK_CONFIG_HOME if set */
+/** ~/.config/swarmly — or $SWARMLY_CONFIG_HOME if set */
 export function configDir(): string {
-  if (process.env.FLOCK_CONFIG_HOME) return process.env.FLOCK_CONFIG_HOME;
+  if (process.env.SWARMLY_CONFIG_HOME) return process.env.SWARMLY_CONFIG_HOME;
   const xdg = process.env.XDG_CONFIG_HOME;
-  return xdg ? path.join(xdg, 'flock') : path.join(os.homedir(), '.config', 'flock');
+  return xdg ? path.join(xdg, 'swarmly') : path.join(os.homedir(), '.config', 'swarmly');
 }
 
-/** ~/.config/flock/roles/ — where users can override prompt templates */
+/** ~/.config/swarmly/roles/ — where users can override prompt templates */
 export function userRolesDir(): string {
   return path.join(configDir(), 'roles');
 }
@@ -72,7 +72,7 @@ export function findActiveSwarm(workspaceRoot: string): string | null {
 
 /**
  * Path to the hook script we install into Claude Code's settings. It lives
- * inside the package's dist/ so updating flock updates the hook.
+ * inside the package's dist/ so updating swarmly updates the hook.
  */
 export function hookScriptPath(): string {
   const here = path.dirname(new URL(import.meta.url).pathname);

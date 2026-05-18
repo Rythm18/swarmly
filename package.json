@@ -1,10 +1,10 @@
 {
-  "name": "flock",
+  "name": "swarmly",
   "version": "0.1.0",
   "description": "A small open-source CLI for orchestrating multi-agent Claude Code swarms. Filesystem-coordinated, no GUI, no MCP, no subscription.",
   "type": "module",
   "bin": {
-    "flock": "./dist/cli.js"
+    "swarmly": "./dist/cli.js"
   },
   "files": [
     "dist/",

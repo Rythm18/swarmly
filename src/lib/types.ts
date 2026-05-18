@@ -1,5 +1,5 @@
 /**
- * Core types for flock — a multi-agent Claude Code swarm orchestrator.
+ * Core types for swarmly — a multi-agent Claude Code swarm orchestrator.
  *
  * The whole tool is filesystem-coordinated: every type here corresponds to
  * something that lives on disk under <workspace>/.swarm/<id>/.

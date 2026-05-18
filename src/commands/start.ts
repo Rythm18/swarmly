@@ -13,7 +13,7 @@ export function startCommand(args: StartArgs): void {
   const workspaceRoot = args.workspace ? args.workspace : process.cwd();
   const agents = composeRoster(args);
 
-  console.log(pc.bold(pc.cyan('flock start')));
+  console.log(pc.bold(pc.cyan('swarmly start')));
   console.log(`  workspace : ${workspaceRoot}`);
   console.log(`  goal      : ${args.goal}`);
   console.log(`  agents    : ${agents.map((a) => a.label).join(', ')}`);
@@ -32,7 +32,7 @@ export function startCommand(args: StartArgs): void {
     console.log(`     • ${pc.cyan(label)} → pid ${pid}`);
   }
   console.log();
-  console.log(pc.dim(`Next: ${pc.bold('flock status')} to watch progress, ${pc.bold('flock stop')} to tear down.`));
+  console.log(pc.dim(`Next: ${pc.bold('swarmly status')} to watch progress, ${pc.bold('swarmly stop')} to tear down.`));
 }
 
 function composeRoster(args: StartArgs) {

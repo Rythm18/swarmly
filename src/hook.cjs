@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * flock status hook — invoked by Claude Code on UserPromptSubmit / Stop /
- * Notification events for agents flock spawned.
+ * swarmly status hook — invoked by Claude Code on UserPromptSubmit / Stop /
+ * Notification events for agents swarmly spawned.
  *
- * Reads Claude's stdin JSON payload, derives the flock swarm directory from
- * environment variables (set when flock spawns the agent), and writes a
- * status JSON file the `flock status` command can render.
+ * Reads Claude's stdin JSON payload, derives the swarmly swarm directory from
+ * environment variables (set when swarmly spawns the agent), and writes a
+ * status JSON file the `swarmly status` command can render.
  *
- * Gated by $FLOCK_AGENT_LABEL — non-flock Claude sessions short-circuit
+ * Gated by $SWARMLY_AGENT_LABEL — non-swarmly Claude sessions short-circuit
  * earlier in the shell wrapper and never invoke this script.
  */
 
@@ -18,12 +18,12 @@ const path = require('path');
 
 const event = (process.argv[2] || '').toLowerCase();
 
-const agentLabel = process.env.FLOCK_AGENT_LABEL;
-const swarmId = process.env.FLOCK_SWARM_ID;
-const workspaceRoot = process.env.FLOCK_WORKSPACE_ROOT;
+const agentLabel = process.env.SWARMLY_AGENT_LABEL;
+const swarmId = process.env.SWARMLY_SWARM_ID;
+const workspaceRoot = process.env.SWARMLY_WORKSPACE_ROOT;
 
 if (!agentLabel || !swarmId || !workspaceRoot) {
-  // Not a flock-spawned session. No-op.
+  // Not a swarmly-spawned session. No-op.
   process.exit(0);
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * flock — a small CLI for orchestrating multi-agent Claude Code swarms.
+ * swarmly — a small CLI for orchestrating multi-agent Claude Code swarms.
  *
  * Subcommands:
  *   start     bootstrap a new swarm in the current workspace
@@ -26,7 +26,7 @@ import { hooksInstallCommand, hooksUninstallCommand } from './commands/hooks.js'
 const program = new Command();
 
 program
-  .name('flock')
+  .name('swarmly')
   .description('Orchestrate multi-agent Claude Code swarms — open source, filesystem-coordinated, no GUI required.')
   .version('0.1.0');
 
@@ -143,13 +143,13 @@ const hooks = program.command('hooks').description('Manage Claude Code status ho
 
 hooks
   .command('install')
-  .description('Wire flock hooks into the workspace\'s Claude Code settings')
+  .description('Wire swarmly hooks into the workspace\'s Claude Code settings')
   .option('-w, --workspace <path>', 'workspace root (defaults to cwd)')
   .action((opts) => hooksInstallCommand({ workspace: opts.workspace }));
 
 hooks
   .command('uninstall')
-  .description('Remove flock hooks from the workspace\'s Claude Code settings')
+  .description('Remove swarmly hooks from the workspace\'s Claude Code settings')
   .option('-w, --workspace <path>', 'workspace root (defaults to cwd)')
   .action((opts) => hooksUninstallCommand({ workspace: opts.workspace }));
 

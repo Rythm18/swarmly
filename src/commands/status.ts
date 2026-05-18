@@ -46,7 +46,7 @@ function render(workspaceRoot: string, swarmId?: string): void {
   printTable(headers, rows);
 
   console.log();
-  console.log(pc.dim('Hint: `flock mail check --as "@operator"` to read messages addressed to you.'));
+  console.log(pc.dim('Hint: `swarmly mail check --as "@operator"` to read messages addressed to you.'));
 }
 
 function rowOf(a: AgentRuntime): string[] {

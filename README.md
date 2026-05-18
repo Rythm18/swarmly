@@ -1,4 +1,4 @@
-# flock
+# swarmly
 
 > Orchestrate multi-agent [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) swarms from your terminal. Open source. Filesystem-coordinated. No GUI required. No subscription.
 
@@ -12,19 +12,19 @@ If you've used commercial multi-agent orchestrators, you know:
 - They wire hooks into your `.claude/settings.local.json` that fire for **every** Claude Code session, including the ones running outside their tool.
 - You pay a subscription for what's ultimately a few hundred lines of file-shuffling logic on top of `claude --dangerously-skip-permissions`.
 
-flock is the minimum useful version of that — without any of the above.
+swarmly is the minimum useful version of that — without any of the above.
 
 ## Install
 
 ```bash
-npm install -g flock
+npm install -g swarmly
 ```
 
 Or run from source:
 
 ```bash
-git clone https://github.com/ridhamk/flock.git
-cd flock
+git clone https://github.com/ridhamk/swarmly.git
+cd swarmly
 npm install
 npm run build
 npm link
@@ -36,8 +36,8 @@ You need [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claud
 
 ```bash
 cd ~/projects/my-app
-flock start "Build a markdown-to-PDF export feature. Should preserve code blocks and tables."
-flock status --watch
+swarmly start "Build a markdown-to-PDF export feature. Should preserve code blocks and tables."
+swarmly status --watch
 ```
 
 That's the whole MVP. By default this spawns:
@@ -51,15 +51,15 @@ Each agent is a `claude --dangerously-skip-permissions` process running in `<wor
 ## Commands
 
 ```
-flock start "<goal>"          # bootstrap a new swarm
-flock status [--watch]        # live dashboard
-flock resume                  # respawn any dead agents
-flock stop                    # kill agents, uninstall hooks
-flock mail send|check|agents  # inter-agent messaging
-flock hooks install|uninstall # manage Claude Code status hooks
+swarmly start "<goal>"          # bootstrap a new swarm
+swarmly status [--watch]        # live dashboard
+swarmly resume                  # respawn any dead agents
+swarmly stop                    # kill agents, uninstall hooks
+swarmly mail send|check|agents  # inter-agent messaging
+swarmly hooks install|uninstall # manage Claude Code status hooks
 ```
 
-Run `flock <cmd> --help` for full options.
+Run `swarmly <cmd> --help` for full options.
 
 ## How it works
 
@@ -78,19 +78,19 @@ Run `flock <cmd> --help` for full options.
 
 No MCP server. No daemon. No network. Agents read the board, write status, drop messages in each other's inboxes. You can `git diff` the swarm state to see what changed.
 
-### Hooks are gated on `$FLOCK_AGENT_LABEL`
+### Hooks are gated on `$SWARMLY_AGENT_LABEL`
 
-When you run `flock hooks install`, three Claude Code hooks (`UserPromptSubmit`, `Stop`, `Notification`) get added to your workspace's `.claude/settings.local.json`. **Each command is gated** on `$FLOCK_AGENT_LABEL` being set — which only flock-spawned agents have. Your regular Claude Code terminal sessions in the same workspace are untouched.
+When you run `swarmly hooks install`, three Claude Code hooks (`UserPromptSubmit`, `Stop`, `Notification`) get added to your workspace's `.claude/settings.local.json`. **Each command is gated** on `$SWARMLY_AGENT_LABEL` being set — which only swarmly-spawned agents have. Your regular Claude Code terminal sessions in the same workspace are untouched.
 
 ```bash
 # What ends up in .claude/settings.local.json (simplified):
-test -n "$FLOCK_AGENT_LABEL" && node "<path>/hook.cjs" stop || exit 0
+test -n "$SWARMLY_AGENT_LABEL" && node "<path>/hook.cjs" stop || exit 0
 ```
 
 ### Resume after crash / reboot
 
 ```bash
-flock resume
+swarmly resume
 ```
 
 Walks the pidfiles, kills entries pointing at dead processes, respawns the missing agents with a "you were interrupted, re-read the board, continue" prompt. The on-disk state (board, completed work, mailboxes) is preserved.
@@ -100,9 +100,9 @@ Walks the pidfiles, kills entries pointing at dead processes, respawns the missi
 The default prompts live in the npm package at `dist/prompts/{coordinator,builder,reviewer}.md`. Override them by dropping your own at:
 
 ```
-~/.config/flock/roles/coordinator.md
-~/.config/flock/roles/builder.md
-~/.config/flock/roles/reviewer.md
+~/.config/swarmly/roles/coordinator.md
+~/.config/swarmly/roles/builder.md
+~/.config/swarmly/roles/reviewer.md
 ```
 
 Available template variables: `{{label}}`, `{{role}}`, `{{goal}}`, `{{swarm_id}}`, `{{board_path}}`, `{{workspace_root}}`, `{{agent_roster}}`.
@@ -123,7 +123,7 @@ v0.2:
 - TUI dashboard (replace the plain table)
 - Custom role definitions in `swarm.yaml`
 - Multi-swarm-per-workspace
-- `flock mail listen` for streaming output
+- `swarmly mail listen` for streaming output
 
 v0.3:
 - Optional web UI (drop a tiny `python -m http.server` static page that polls status JSONs)

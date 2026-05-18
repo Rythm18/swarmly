@@ -1,14 +1,14 @@
 /**
- * Wire flock's status-tracking hook into Claude Code's settings.
+ * Wire swarmly's status-tracking hook into Claude Code's settings.
  *
  * We add 3 hooks to <workspace>/.claude/settings.local.json:
  *   - UserPromptSubmit → record "working"
  *   - Stop             → record "idle"
  *   - Notification     → record "needs-input"
  *
- * The hooks command is gated on $FLOCK_AGENT_LABEL so they're a no-op for
+ * The hooks command is gated on $SWARMLY_AGENT_LABEL so they're a no-op for
  * any Claude Code session running in the same workspace that wasn't
- * spawned by flock (i.e., your normal terminal sessions).
+ * spawned by swarmly (i.e., your normal terminal sessions).
  */
 
 import fs from 'node:fs';
@@ -30,7 +30,7 @@ interface ClaudeSettings {
   [k: string]: unknown;
 }
 
-const FLOCK_MARK = '#flock-managed';
+const SWARMLY_MARK = '#swarmly-managed';
 
 export function installHooks(workspaceRoot: string): void {
   const settingsDir = path.join(workspaceRoot, '.claude');
@@ -41,9 +41,9 @@ export function installHooks(workspaceRoot: string): void {
   settings.hooks = settings.hooks ?? {};
 
   const script = hookScriptPath();
-  // The shell wrapper checks the env var so non-flock Claude sessions skip.
+  // The shell wrapper checks the env var so non-swarmly Claude sessions skip.
   const wrap = (event: string) =>
-    `test -n "$FLOCK_AGENT_LABEL" && node "${script}" ${event} ${FLOCK_MARK} || exit 0`;
+    `test -n "$SWARMLY_AGENT_LABEL" && node "${script}" ${event} ${SWARMLY_MARK} || exit 0`;
 
   settings.hooks.UserPromptSubmit = upsert(
     settings.hooks.UserPromptSubmit,
@@ -68,7 +68,7 @@ export function uninstallHooks(workspaceRoot: string): void {
     const filtered = list
       .map((entry) => ({
         ...entry,
-        hooks: entry.hooks.filter((h) => !h.command.includes(FLOCK_MARK)),
+        hooks: entry.hooks.filter((h) => !h.command.includes(SWARMLY_MARK)),
       }))
       .filter((entry) => entry.hooks.length > 0);
     if (filtered.length === 0) {
@@ -107,11 +107,11 @@ function writeSettings(filepath: string, data: ClaudeSettings): void {
 function upsert(list: HookEntry[] | undefined, command: string): HookEntry[] {
   const existing = list ?? [];
   // Look for an entry with our managed marker
-  const ours = existing.find((e) => e.hooks.some((h) => h.command.includes(FLOCK_MARK)));
+  const ours = existing.find((e) => e.hooks.some((h) => h.command.includes(SWARMLY_MARK)));
   if (ours) {
-    // Replace the flock command in-place to pick up any path changes
+    // Replace the swarmly command in-place to pick up any path changes
     ours.hooks = ours.hooks.map((h) =>
-      h.command.includes(FLOCK_MARK) ? { type: 'command', command } : h,
+      h.command.includes(SWARMLY_MARK) ? { type: 'command', command } : h,
     );
     return existing;
   }
