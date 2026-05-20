@@ -16,6 +16,7 @@ import { startCommand } from './commands/start.js';
 import { statusCommand } from './commands/status.js';
 import { resumeCommand } from './commands/resume.js';
 import { stopCommand } from './commands/stop.js';
+import { attachCommand } from './commands/attach.js';
 import {
   mailSendCommand,
   mailCheckCommand,
@@ -28,7 +29,7 @@ const program = new Command();
 program
   .name('swarmly')
   .description('Orchestrate multi-agent Claude Code swarms — open source, filesystem-coordinated, no GUI required.')
-  .version('0.1.0');
+  .version('0.2.1');
 
 // ── start ─────────────────────────────────────────────────────────────────────
 program
@@ -86,6 +87,16 @@ program
       swarmId: opts.id,
       keepHooks: opts.keepHooks,
     });
+  });
+
+// ── attach ────────────────────────────────────────────────────────────────────
+program
+  .command('attach <agent>')
+  .description('Follow an agent live: tail its transcript + status (read-only)')
+  .option('-w, --workspace <path>', 'workspace root (defaults to cwd)')
+  .option('--id <swarmId>', 'specific swarm id (defaults to most recent)')
+  .action((agent, opts) => {
+    attachCommand({ agent, workspace: opts.workspace, swarmId: opts.id });
   });
 
 // ── mail ──────────────────────────────────────────────────────────────────────

@@ -38,10 +38,14 @@ export function spawnAgent(opts: SpawnOptions): number {
     'a',
   );
 
+  // Absolute path to the swarmly CLI binary that spawned this agent.
+  // Agents reference $SWARMLY_CLI (or the interpolated {{cli}} in their prompt)
+  // so commands work even when `swarmly` isn't on PATH inside the spawned shell.
+  const swarmlyCliPath = process.argv[1] ?? 'swarmly';
+
   // The full first message includes the role prompt + a kickoff instruction.
-  const firstMessage = resume
-    ? `${prompt}\n\n---\n\nswarmly restarted and is resuming this swarm. Re-read SWARM_BOARD.md, run swarmly mail check --consume --as "${agent.label}", and continue from the current board state.`
-    : prompt;
+  const resumeNote = `\n\n---\n\nswarmly restarted and is resuming this swarm. Re-read SWARM_BOARD.md, run \`$SWARMLY_CLI mail check --consume --as "${agent.label}"\`, and continue from the current board state.`;
+  const firstMessage = resume ? `${prompt}${resumeNote}` : prompt;
 
   // We pipe stdin so we can deliver the initial message, then close.
   // claude reads the prompt from stdin and proceeds.
@@ -53,6 +57,7 @@ export function spawnAgent(opts: SpawnOptions): number {
       SWARMLY_AGENT_LABEL: agent.label,
       SWARMLY_AGENT_ROLE: agent.role,
       SWARMLY_WORKSPACE_ROOT: swarm.workspaceRoot,
+      SWARMLY_CLI: swarmlyCliPath,
     },
     detached: true,
     stdio: ['pipe', logStream, logStream],

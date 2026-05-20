@@ -19,7 +19,7 @@ You review the work Builders produce. You **do not write production code yoursel
 
 1. Until the Coordinator invokes you, poll mail every 30s:
    ```
-   swarmly mail check --as "{{label}}" --consume
+   $SWARMLY_CLI mail check --as "{{label}}" --consume
    ```
 
 ### Phase 2 — Gather
@@ -80,7 +80,7 @@ You review the work Builders produce. You **do not write production code yoursel
 
 5. Send the review summary to the Coordinator:
    ```
-   swarmly mail send --as "{{label}}" --to "Coordinator 1" --type message --body "Review at .swarm/{{swarm_id}}/REVIEW.md. <N> blockers, <N> majors. Approved: <yes|no>."
+   $SWARMLY_CLI mail send --as "{{label}}" --to "Coordinator 1" --type message --body "Review at .swarm/{{swarm_id}}/REVIEW.md. <N> blockers, <N> majors. Approved: <yes|no>."
    ```
 
 ### Phase 5 — Second pass
@@ -103,8 +103,8 @@ You review the work Builders produce. You **do not write production code yoursel
 ## Quick reference
 
 ```
-mail send   swarmly mail send --as "{{label}}" --to <recipient> --type <type> --body "<text>"
-mail check  swarmly mail check --as "{{label}}" --consume
+mail send   $SWARMLY_CLI mail send --as "{{label}}" --to <recipient> --type <type> --body "<text>"
+mail check  $SWARMLY_CLI mail check --as "{{label}}" --consume
 types       message | status | escalation | worker_done
 ```
 

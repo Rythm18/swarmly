@@ -251,6 +251,10 @@ function resolvePrompt(agent: AgentSpec, config: SwarmConfig): string {
   const roster = config.agents
     .map((a) => `  - "${a.label}" (${a.role})`)
     .join('\n');
+  // {{cli}} resolves to the absolute path of the swarmly binary that spawned
+  // this agent. Prompts use `$SWARMLY_CLI` at runtime; the literal path is
+  // available too if a template wants to bake it in.
+  const cliPath = process.argv[1] ?? 'swarmly';
   return template
     .replaceAll('{{label}}', agent.label)
     .replaceAll('{{role}}', agent.role)
@@ -258,5 +262,6 @@ function resolvePrompt(agent: AgentSpec, config: SwarmConfig): string {
     .replaceAll('{{swarm_id}}', config.id)
     .replaceAll('{{board_path}}', path.relative(config.workspaceRoot, swarmPaths(config.workspaceRoot, config.id).boardFile))
     .replaceAll('{{workspace_root}}', config.workspaceRoot)
-    .replaceAll('{{agent_roster}}', roster);
+    .replaceAll('{{agent_roster}}', roster)
+    .replaceAll('{{cli}}', cliPath);
 }

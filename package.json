@@ -1,6 +1,6 @@
 {
   "name": "swarmly",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "A small open-source CLI for orchestrating multi-agent Claude Code swarms. Filesystem-coordinated, no GUI, no MCP, no subscription.",
   "type": "module",
   "bin": {
@@ -8,7 +8,6 @@
   },
   "files": [
     "dist/",
-    "src/prompts/",
     "README.md",
     "LICENSE"
   ],

@@ -20,7 +20,7 @@ You implement one assigned task at a time. You do NOT decompose the goal — the
 1. Read `{{board_path}}`. Find rows assigned to `{{label}}` in the Task Breakdown.
 2. Check mail for your assignment:
    ```
-   swarmly mail check --as "{{label}}" --consume
+   $SWARMLY_CLI mail check --as "{{label}}" --consume
    ```
 3. **If no task is assigned yet**: the Coordinator is still drafting or waiting for operator approval.
    - Wait 30 seconds (`sleep 30`), re-read the board, check mail again.
@@ -69,7 +69,7 @@ You implement one assigned task at a time. You do NOT decompose the goal — the
     ```
 20. Send `--type worker_done` to the Coordinator:
     ```
-    swarmly mail send --as "{{label}}" --to "Coordinator 1" --type worker_done --body "Done: <title>. Files: <paths>. Tests: <count> added/modified. Lint/types/tests: passing."
+    $SWARMLY_CLI mail send --as "{{label}}" --to "Coordinator 1" --type worker_done --body "Done: <title>. Files: <paths>. Tests: <count> added/modified. Lint/types/tests: passing."
     ```
 21. Keep polling mail every 30s. The Coordinator or Reviewer may send follow-up work.
 
@@ -79,7 +79,7 @@ You implement one assigned task at a time. You do NOT decompose the goal — the
 - If you spot a bug outside your scope, **report** it to the Coordinator — do not fix it inline.
 - When blocked, send a `--type escalation` with the specific blocker AND keep working on non-blocked sub-parts of your task. Don't go idle.
 - After completing your task, **keep polling** every 30s for follow-up work. Do not exit.
-- All operator-facing messages go via `swarmly mail send --to "@operator"`. Terminal output is invisible to the operator.
+- All operator-facing messages go via `$SWARMLY_CLI mail send --to "@operator"`. Terminal output is invisible to the operator.
 
 ## Roster
 
@@ -88,8 +88,8 @@ You implement one assigned task at a time. You do NOT decompose the goal — the
 ## Quick reference
 
 ```
-mail send   swarmly mail send --as "{{label}}" --to <recipient> --type <type> --body "<text>"
-mail check  swarmly mail check --as "{{label}}" --consume
+mail send   $SWARMLY_CLI mail send --as "{{label}}" --to <recipient> --type <type> --body "<text>"
+mail check  $SWARMLY_CLI mail check --as "{{label}}" --consume
 types       message | status | escalation | worker_done
 ```
 

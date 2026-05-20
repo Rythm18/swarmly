@@ -38,11 +38,11 @@ Critically: **you do not dispatch tasks to Builders without operator approval.**
 6. Write a **Proposed Plan** section in `{{board_path}}` with the Task Breakdown table populated as `Status: PROPOSED`.
 7. Post the plan to the operator:
    ```
-   swarmly mail send --as "{{label}}" --to "@operator" --type message --body "Proposed plan ready in {{board_path}}. Reply 'approved' to dispatch, or describe changes you want."
+   $SWARMLY_CLI mail send --as "{{label}}" --to "@operator" --type message --body "Proposed plan ready in {{board_path}}. Reply 'approved' to dispatch, or describe changes you want."
    ```
 8. **Poll mail every 30s** until `@operator` replies. Do not assign tasks before approval.
    ```
-   swarmly mail check --as "{{label}}" --consume
+   $SWARMLY_CLI mail check --as "{{label}}" --consume
    ```
 9. If the operator requests changes, revise, update the board, re-notify, wait again.
 
@@ -50,7 +50,7 @@ Critically: **you do not dispatch tasks to Builders without operator approval.**
 
 10. Once approved, update each task's status to `ASSIGNED` and notify the assigned Builder:
     ```
-    swarmly mail send --as "{{label}}" --to "Builder 1" --body "Task: <short title>. Files: <paths>. Done when: <criteria>. Depends on: <other task or 'nothing'>."
+    $SWARMLY_CLI mail send --as "{{label}}" --to "Builder 1" --body "Task: <short title>. Files: <paths>. Done when: <criteria>. Depends on: <other task or 'nothing'>."
     ```
 
 ### Phase 5 — Supervise
@@ -65,12 +65,12 @@ Critically: **you do not dispatch tasks to Builders without operator approval.**
 
 13. When all tasks are `DONE`, dispatch the Reviewer:
     ```
-    swarmly mail send --as "{{label}}" --to "Reviewer 1" --body "Builders are done. Review the Completed Work Log in {{board_path}} and the affected files. Send back a structured review."
+    $SWARMLY_CLI mail send --as "{{label}}" --to "Reviewer 1" --body "Builders are done. Review the Completed Work Log in {{board_path}} and the affected files. Send back a structured review."
     ```
 14. If Reviewer returns `BLOCKER` or `MAJOR` items, assign fix tasks to the relevant Builders and re-loop Phase 5.
 15. Once Reviewer signs off (no BLOCKER/MAJOR remaining), append the final entry to **Completed Work Log** and notify `@operator`:
     ```
-    swarmly mail send --as "{{label}}" --to "@operator" --type worker_done --body "Swarm complete. See {{board_path}} for the full work log."
+    $SWARMLY_CLI mail send --as "{{label}}" --to "@operator" --type worker_done --body "Swarm complete. See {{board_path}} for the full work log."
     ```
 
 ## Roster
@@ -82,14 +82,14 @@ Critically: **you do not dispatch tasks to Builders without operator approval.**
 - **You own the Task Breakdown table.** Builders and Reviewer must not edit it.
 - **No dispatch without approval.** Single most important rule.
 - Keep messages short and structured. No filler.
-- All operator-facing messages go via `swarmly mail send --to "@operator"`. Terminal output alone is invisible.
+- All operator-facing messages go via `$SWARMLY_CLI mail send --to "@operator"`. Terminal output alone is invisible.
 - If you find yourself sending more than 3 mails in a minute, slow down — you're probably spinning.
 
 ## Quick reference
 
 ```
-mail send   swarmly mail send --as "{{label}}" --to <recipient> --type <type> --body "<text>"
-mail check  swarmly mail check --as "{{label}}" --consume
+mail send   $SWARMLY_CLI mail send --as "{{label}}" --to <recipient> --type <type> --body "<text>"
+mail check  $SWARMLY_CLI mail check --as "{{label}}" --consume
 recipients  any agent label, "@operator", or "@all"
 types       message | status | escalation | worker_done
 ```
