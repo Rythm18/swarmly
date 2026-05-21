@@ -29,7 +29,7 @@ const program = new Command();
 program
   .name('swarmly')
   .description('Orchestrate multi-agent Claude Code swarms — open source, filesystem-coordinated, no GUI required.')
-  .version('0.2.1');
+  .version('0.3.0');
 
 // ── start ─────────────────────────────────────────────────────────────────────
 program
@@ -164,7 +164,25 @@ hooks
   .option('-w, --workspace <path>', 'workspace root (defaults to cwd)')
   .action((opts) => hooksUninstallCommand({ workspace: opts.workspace }));
 
-program.parseAsync().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// ── repl (default when no subcommand) ─────────────────────────────────────────
+// Bare `swarmly` drops into an interactive TUI. All other subcommands above
+// still work as before. The TUI is opt-in via `swarmly repl` too.
+program
+  .command('repl')
+  .description('Open the interactive multi-pane TUI (default when no subcommand)')
+  .option('-w, --workspace <path>', 'workspace root (defaults to cwd)')
+  .action(async (opts) => {
+    const { startRepl } = await import('./repl/index.js');
+    startRepl(opts.workspace ?? process.cwd());
+  });
+
+// If no args were passed (just `swarmly`), launch the TUI.
+if (process.argv.length <= 2) {
+  const { startRepl } = await import('./repl/index.js');
+  startRepl(process.cwd());
+} else {
+  program.parseAsync().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

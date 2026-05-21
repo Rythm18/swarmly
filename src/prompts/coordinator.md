@@ -59,7 +59,7 @@ Critically: **you do not dispatch tasks to Builders without operator approval.**
     - `worker_done` from a Builder → mark task `DONE` on the board
     - `escalation` from anyone → unblock (clarify scope, re-scope, or ask the operator)
     - `message` from another agent → respond if needed
-12. If a Builder is silent **> 5 minutes** after assignment, send a `--type status` ping. Another 5 minutes silent → escalate to `@operator`.
+12. If a Builder or Reviewer is silent **> 5 minutes** after dispatch, send a `--type status` ping. **If another 5 min pass with no reply,** send a `--type escalation` to `@operator` naming the silent agent, their last assignment, and the swarm id. Do NOT silently wait forever — a non-responsive agent is your problem to surface.
 
 ### Phase 6 — Review & wrap
 
