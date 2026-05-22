@@ -117,11 +117,35 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
     }
   };
 
+  // ─── Slash command suggestions ───
+  // When input starts with /, surface matching commands above the input bar.
+  // Tab autocompletes to the longest common prefix among matches.
+  const slashMatches = useMemo(() => {
+    if (!input.startsWith('/')) return [];
+    const q = input.toLowerCase();
+    return COMMANDS.filter((c) => {
+      // First token of the command spec, e.g. "/start" from "/start <goal>"
+      const head = c.name.split(/\s+/)[0].toLowerCase();
+      return head.startsWith(q) || c.name.toLowerCase().includes(q.replace('/', ''));
+    });
+  }, [input]);
+
+  // Tab key → autocomplete to the longest common prefix of matching commands
+  useInput((_input, key) => {
+    if (!key.tab) return;
+    if (!input.startsWith('/') || slashMatches.length === 0) return;
+    const firstTokens = slashMatches.map((c) => c.name.split(/\s+/)[0]);
+    const prefix = longestCommonPrefix(firstTokens);
+    if (prefix.length > input.length) setInput(prefix + ' ');
+    else if (slashMatches.length === 1) setInput(firstTokens[0] + ' ');
+  });
+
   // ─── Layout calculations ───
   const headerHeight = 1;
   const inputHeight = 1;
   const activityHeight = 6;
-  const bodyHeight = Math.max(8, rows - headerHeight - inputHeight - activityHeight - 3);
+  const popupHeight = slashMatches.length > 0 ? Math.min(slashMatches.length + 2, 8) : 0;
+  const bodyHeight = Math.max(8, rows - headerHeight - inputHeight - activityHeight - popupHeight - 3);
 
   return (
     <Box flexDirection="column" width={cols} height={rows}>
@@ -145,13 +169,43 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
         <ActivityPane events={swarm.activity} max={activityHeight - 2} />
       </Box>
 
+      {slashMatches.length > 0 && (
+        <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
+          <Box>
+            <Text dimColor>commands matching </Text>
+            <Text color="cyan" bold>{input}</Text>
+            <Text dimColor>  ·  Tab to complete  ·  Enter to run</Text>
+          </Box>
+          {slashMatches.slice(0, 6).map((c) => (
+            <Box key={c.name}>
+              <Text color="cyan">{c.name.split(/\s+/)[0]}</Text>
+              <Text dimColor>{c.name.slice(c.name.split(/\s+/)[0].length)}</Text>
+              <Text>  </Text>
+              <Text dimColor>{c.help}</Text>
+            </Box>
+          ))}
+        </Box>
+      )}
+
       <Box flexDirection="row">
         <Text color="cyan" bold>{'> '}</Text>
-        <TextInput value={input} onChange={setInput} onSubmit={onSubmit} placeholder={pendingGoal ? 'y / n' : 'type a goal or /command'} />
+        <TextInput value={input} onChange={setInput} onSubmit={onSubmit} placeholder={pendingGoal ? 'y / n' : 'type a goal or / for commands'} />
       </Box>
     </Box>
   );
 };
+
+function longestCommonPrefix(strs: string[]): string {
+  if (strs.length === 0) return '';
+  let pref = strs[0];
+  for (const s of strs.slice(1)) {
+    while (!s.startsWith(pref)) {
+      pref = pref.slice(0, -1);
+      if (!pref) return '';
+    }
+  }
+  return pref;
+}
 
 // ─── Header ────────────────────────────────────────────────────────────────
 
