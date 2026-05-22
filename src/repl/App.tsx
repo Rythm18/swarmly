@@ -126,7 +126,7 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
     return COMMANDS.filter((c) => {
       // First token of the command spec, e.g. "/start" from "/start <goal>"
       const head = c.name.split(/\s+/)[0].toLowerCase();
-      return head.startsWith(q) || c.name.toLowerCase().includes(q.replace('/', ''));
+      return head.startsWith(q);
     });
   }, [input]);
 

@@ -35,7 +35,8 @@ export const COMMANDS: { name: string; help: string }[] = [
   { name: '/resume', help: 'Respawn any dead agents in the active swarm' },
   { name: '/stop', help: 'Tear down the active swarm and uninstall hooks' },
   { name: '/help', help: 'Show this command list' },
-  { name: '/quit, /exit', help: 'Exit the TUI' },
+  { name: '/quit', help: 'Exit the TUI (alias: /exit)' },
+  { name: '/exit', help: 'Exit the TUI (alias: /quit)' },
 ];
 
 export async function runCommand(ctx: CommandCtx): Promise<string | null> {
