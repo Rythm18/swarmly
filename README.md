@@ -18,15 +18,7 @@ swarmly is the minimum useful version of that — without any of the above.
 
 You need [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) installed and `claude` on your `$PATH`.
 
-### Option 1 — Homebrew (recommended on Mac)
-
-```bash
-brew install Rythm18/swarmly/swarmly
-```
-
-This is the most painless path on macOS: Homebrew owns its prefix, so `swarmly` lands on your `$PATH` automatically. No `sudo`, no `~/.zshrc` edits.
-
-### Option 2 — npx (no install)
+### Option 1 — npx (no install)
 
 ```bash
 npx swarmly
@@ -34,7 +26,7 @@ npx swarmly
 
 Slight startup delay on first run while npm fetches the package, but zero setup. Great for trying it out before deciding to install.
 
-### Option 3 — npm global install
+### Option 2 — npm global install (recommended for regular use)
 
 ```bash
 npm install -g swarmly
@@ -59,7 +51,7 @@ swarmly --version    # works now
 
 After this, future `npm install -g <anything>` works without `sudo` for life.
 
-### Option 4 — From source
+### Option 3 — From source
 
 ```bash
 git clone https://github.com/Rythm18/swarmly.git
