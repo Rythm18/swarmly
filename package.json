@@ -1,6 +1,6 @@
 {
   "name": "swarmly",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A small open-source CLI for orchestrating multi-agent Claude Code swarms. Filesystem-coordinated, no GUI, no MCP, no subscription.",
   "type": "module",
   "bin": {
@@ -15,7 +15,9 @@
     "build": "tsc && npm run copy-assets && chmod +x dist/cli.js dist/hook.cjs",
     "copy-assets": "node -e \"const fs=require('fs'),path=require('path');fs.mkdirSync('dist/prompts',{recursive:true});for(const f of fs.readdirSync('src/prompts'))fs.copyFileSync(path.join('src/prompts',f),path.join('dist/prompts',f));fs.copyFileSync('src/hook.cjs','dist/hook.cjs');\"",
     "dev": "tsc --watch",
-    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run test && npm run build",
     "start": "node dist/cli.js"
   },
   "keywords": [
@@ -43,6 +45,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.15",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.7"
   }
 }

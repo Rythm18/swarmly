@@ -88,11 +88,15 @@ function expandRecipients(to: string, from: string, agents: AgentSpec[]): string
   return [...labels, '@operator'];
 }
 
+// Process-scoped counter so sends within the same millisecond still sort stably.
+let writeSeq = 0;
+
 function writeToInbox(inboxDir: string, recipient: string, msg: MailMessage): void {
   const dir = path.join(inboxDir, recipient);
   fs.mkdirSync(dir, { recursive: true });
-  // Filename: <epoch-ms>-<id>.json — sorts chronologically
-  const filename = `${Date.now()}-${msg.id}.json`;
+  // Filename: <epoch-ms>-<seq>-<id>.json — sorts chronologically; seq disambiguates same-ms writes.
+  const seq = String(writeSeq++).padStart(6, '0');
+  const filename = `${Date.now()}-${seq}-${msg.id}.json`;
   const tmp = path.join(dir, filename + '.tmp');
   fs.writeFileSync(tmp, JSON.stringify(msg, null, 2));
   fs.renameSync(tmp, path.join(dir, filename));
