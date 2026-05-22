@@ -16,21 +16,58 @@ swarmly is the minimum useful version of that — without any of the above.
 
 ## Install
 
+You need [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) installed and `claude` on your `$PATH`.
+
+### Option 1 — Homebrew (recommended on Mac)
+
 ```bash
-npm install -g swarmly
+brew install Rythm18/swarmly/swarmly
 ```
 
-Or run from source:
+This is the most painless path on macOS: Homebrew owns its prefix, so `swarmly` lands on your `$PATH` automatically. No `sudo`, no `~/.zshrc` edits.
+
+### Option 2 — npx (no install)
 
 ```bash
-git clone https://github.com/ridhamk/swarmly.git
+npx swarmly
+```
+
+Slight startup delay on first run while npm fetches the package, but zero setup. Great for trying it out before deciding to install.
+
+### Option 3 — npm global install
+
+```bash
+npm install -g swarmly
+swarmly --version    # should print 0.3.x
+```
+
+**If `swarmly` says "command not found" after install — npm prefix isn't on your PATH.** This is npm's well-known macOS/Linux gotcha. Fix it once and never deal with it again:
+
+```bash
+# Set npm to install globals into a user-owned prefix
+mkdir -p ~/.npm-global
+npm config set prefix ~/.npm-global
+
+# Add it to your PATH (use ~/.bashrc if you're on bash)
+echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Reinstall
+npm install -g swarmly
+swarmly --version    # works now
+```
+
+After this, future `npm install -g <anything>` works without `sudo` for life.
+
+### Option 4 — From source
+
+```bash
+git clone https://github.com/Rythm18/swarmly.git
 cd swarmly
 npm install
 npm run build
 npm link
 ```
-
-You need [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) installed and `claude` on your `$PATH`.
 
 ## Quick start
 
