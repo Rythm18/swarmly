@@ -19,6 +19,8 @@ export interface CommandCtx {
   setFocusedAgent: (label: string | null) => void;
   setPendingGoal: (goal: string | null) => void;
   pushOutput: (line: string) => void;
+  /** Force the TUI to re-read swarm state from disk after a mutation. */
+  reload: () => void;
 }
 
 export const COMMANDS: { name: string; help: string }[] = [

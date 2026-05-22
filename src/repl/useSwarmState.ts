@@ -98,14 +98,31 @@ export function useSwarmState(workspaceRoot: string): SwarmState & { reload: () 
     }));
   }, [workspaceRoot]);
 
-  // Initial load + watcher setup
-  useEffect(() => {
-    recompute();
-    const id = findActiveSwarm(workspaceRoot);
-    if (!id) return;
-    const paths = swarmPaths(workspaceRoot, id);
+  // Track the current swarm id so we can re-setup watchers when it changes
+  // (e.g. swarm was just created via /start while the TUI was already running).
+  const [currentSwarmId, setCurrentSwarmId] = useState<string | null>(null);
 
-    // Track last-seen mail files so we can derive new ones
+  // Cheap polling loop that detects swarm id changes. Always runs.
+  // When it sees a transition (null → id) or (id → different id) we update
+  // the state, which triggers the heavier watcher effect below to re-bind.
+  useEffect(() => {
+    const tick = () => {
+      const id = findActiveSwarm(workspaceRoot);
+      setCurrentSwarmId((prev) => (prev === id ? prev : id));
+      recompute();
+    };
+    tick();
+    const ticker = setInterval(tick, 2000);
+    return () => clearInterval(ticker);
+  }, [workspaceRoot, recompute]);
+
+  // Heavier fs.watch watchers — only attached when a swarm exists.
+  // Re-binds whenever the swarm id changes (handles the "no swarm at startup
+  // → /start creates one" flow correctly).
+  useEffect(() => {
+    if (!currentSwarmId) return;
+    const paths = swarmPaths(workspaceRoot, currentSwarmId);
+
     const seenOpMail = new Set<string>(
       safeReaddir(paths.inboxDir + '/@operator'),
     );
@@ -124,7 +141,7 @@ export function useSwarmState(workspaceRoot: string): SwarmState & { reload: () 
         if (!fs.existsSync(target)) return;
         const w = fs.watch(target, (_e, filename) => onEvent(filename ? String(filename) : null));
         watchers.push(w);
-      } catch {/* fs.watch can be flaky cross-platform; fall back to polling below */}
+      } catch {/* fs.watch can be flaky cross-platform; the polling tick covers us */}
     };
 
     tryWatch(paths.swarmDir, (filename) => {
@@ -141,7 +158,6 @@ export function useSwarmState(workspaceRoot: string): SwarmState & { reload: () 
       if (!filename || !filename.endsWith('.json')) return;
       if (seenOpMail.has(filename)) return;
       seenOpMail.add(filename);
-      // Read the mail to surface who/what
       try {
         const fp = path.join(operatorInbox, filename);
         const msg = JSON.parse(fs.readFileSync(fp, 'utf8'));
@@ -151,14 +167,10 @@ export function useSwarmState(workspaceRoot: string): SwarmState & { reload: () 
       }
     });
 
-    // Fallback ticker — refresh every 5s in case fs.watch missed an event.
-    const ticker = setInterval(recompute, 5000);
-
     return () => {
       watchers.forEach((w) => w.close());
-      clearInterval(ticker);
     };
-  }, [workspaceRoot, recompute]);
+  }, [workspaceRoot, currentSwarmId, recompute]);
 
   return { ...state, reload: recompute };
 }

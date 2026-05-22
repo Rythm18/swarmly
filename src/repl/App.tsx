@@ -73,9 +73,12 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
           setFocusedAgent,
           setPendingGoal: () => {},
           pushOutput,
+          reload: swarm.reload,
         });
         setPendingGoal(null);
         if (result) pushOutput(result);
+        // Reflect new on-disk state immediately so /status etc. work without the 2s poll wait.
+        swarm.reload();
       } else if (/^n(o)?$/i.test(value.trim())) {
         pushOutput('Cancelled.');
         setPendingGoal(null);
@@ -94,8 +97,12 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
         setFocusedAgent,
         setPendingGoal,
         pushOutput,
+        reload: swarm.reload,
       });
       if (result) pushOutput(result);
+      // Refresh state immediately for commands that mutate the swarm
+      const mutating = /^\/(start|stop|resume|approve|chat|mail)\b/i.test(value);
+      if (mutating) swarm.reload();
       if (value.trim() === '/quit' || value.trim() === '/exit') exit();
     } else {
       // Free-text behavior depends on swarm state
