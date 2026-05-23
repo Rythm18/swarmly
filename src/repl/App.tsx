@@ -1,31 +1,34 @@
 /**
  * Top-level Ink TUI for swarmly.
  *
- * Layout:
- *   ┌─ Header (swarm id · agent count · rtk indicator) ─────────────┐
- *   │ Left pane (agents)         │ Right pane (board OR transcript)│
- *   ├──────────────────────────────────────────────────────────────┤
- *   │ Activity feed (last N events)                                │
- *   ├──────────────────────────────────────────────────────────────┤
- *   │ > input line — slash commands or free text                   │
- *   └──────────────────────────────────────────────────────────────┘
+ * Thin renderer over useReducer(appStateReducer) — see ./useAppState.ts for the
+ * full state machine. Keystrokes are translated by ./keymap.ts and dispatched
+ * here; the only local component state is the input buffer, terminal size, and
+ * the wizard rename buffer.
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useReducer, useState, useMemo, useEffect } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
-import TextInput from 'ink-text-input';
 import { useSwarmState } from './useSwarmState.js';
-import { runCommand, COMMANDS } from './commands.js';
+import { runCommand } from './commands.js';
 import { rtkAvailable } from './ambient.js';
+import { appStateReducer, initialState } from './useAppState.js';
+import { keyToAction } from './keymap.js';
+import { detectMention, applyMention, parseLeadingMention } from './mention.js';
 import { Header } from './components/Header.js';
 import { AgentsPane } from './components/AgentsPane.js';
 import { BoardPane } from './components/BoardPane.js';
 import { TranscriptPane } from './components/TranscriptPane.js';
 import { ActivityPane } from './components/ActivityPane.js';
+import { RosterWizard } from './components/RosterWizard.js';
+import { HelpOverlay } from './components/HelpOverlay.js';
+import { InputBar } from './components/InputBar.js';
+import { filterCandidates } from './components/MentionPicker.js';
+import { createSwarm } from '../lib/swarm.js';
+import { sendMail } from '../lib/mailbox.js';
+import { swarmPaths } from '../lib/paths.js';
 
-interface AppProps {
-  cwd: string;
-}
+interface AppProps { cwd: string; }
 
 export const App: React.FC<AppProps> = ({ cwd }) => {
   const { exit } = useApp();
@@ -35,10 +38,7 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
 
   useEffect(() => {
     if (!stdout) return;
-    const onResize = () => {
-      setCols(stdout.columns ?? 100);
-      setRows(stdout.rows ?? 30);
-    };
+    const onResize = () => { setCols(stdout.columns ?? 100); setRows(stdout.rows ?? 30); };
     stdout.on('resize', onResize);
     return () => { stdout.off('resize', onResize); };
   }, [stdout]);
@@ -46,129 +46,196 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
   const swarm = useSwarmState(cwd);
   const rtkOn = useMemo(() => rtkAvailable(), []);
 
+  const [state, dispatch] = useReducer(appStateReducer, initialState);
   const [input, setInput] = useState('');
-  const [output, setOutput] = useState<string[]>([
-    '👋 Welcome to swarmly. Type / to see commands. Type a goal description to start a new swarm.',
-  ]);
-  const [focusedAgent, setFocusedAgent] = useState<string | null>(null);
-  const [pendingGoal, setPendingGoal] = useState<string | null>(null);
+  const [renameBuffer, setRenameBuffer] = useState('');
 
-  const pushOutput = (line: string) => setOutput((prev) => [...prev.slice(-100), line]);
+  // Derived: mention picker visibility — derived from input + cursor position.
+  const mention = useMemo(
+    () => state.mode === 'active' ? detectMention(input, input.length) : null,
+    [state.mode, input],
+  );
 
-  // ^C exits
-  useInput((_input, key) => {
-    if (key.ctrl && _input === 'c') {
-      exit();
+  // Sync mentionOpen with the live derivation.
+  useEffect(() => {
+    if (mention && !state.mentionOpen) dispatch({ type: 'mention_open' });
+    if (!mention && state.mentionOpen) dispatch({ type: 'mention_close' });
+  }, [mention, state.mentionOpen]);
+
+  // React to swarm appearing/changing on disk.
+  useEffect(() => {
+    if (state.mode !== 'active' && swarm.config) {
+      dispatch({ type: 'swarm_detected', config: swarm.config });
+    }
+  }, [swarm.config, state.mode]);
+
+  // React to roster changes (agent died, was renamed, etc.).
+  useEffect(() => {
+    if (state.mode === 'active') {
+      dispatch({ type: 'agents_changed', agents: swarm.agents });
+    }
+  }, [swarm.agents, state.mode]);
+
+  // ─── Wizard spawn ────────────────────────────────────────────────────────
+  const handleWizardSpawn = () => {
+    if (!state.rosterDraft || !state.pendingGoal) return;
+    try {
+      createSwarm({ goal: state.pendingGoal, workspaceRoot: cwd, agents: state.rosterDraft });
+      // swarm.reload picks up the new swarm; the useEffect on swarm.config fires swarm_detected.
+      swarm.reload();
+    } catch (err: any) {
+      dispatch({ type: 'push_output', line: `✗ ${err?.message ?? err}` });
+    }
+  };
+
+  // ─── Keyboard ─────────────────────────────────────────────────────────────
+  useInput((char, key) => {
+    if (key.ctrl && char === 'c') { exit(); return; }
+
+    const action = keyToAction(
+      char,
+      { tab: !!key.tab, escape: !!key.escape, return: !!key.return, upArrow: !!key.upArrow, downArrow: !!key.downArrow },
+      input,
+      state,
+      swarm.agents,
+    );
+    if (action) {
+      // Pre-dispatch: rename_start needs to seed the rename buffer with the current label.
+      if (action.type === 'rename_start' && state.rosterDraft) {
+        setRenameBuffer(state.rosterDraft[state.rosterCursor]?.label ?? '');
+      }
+      dispatch(action);
+    }
+    // Mention navigation
+    if (state.mentionOpen) {
+      const candidates = filterCandidates(mention?.token ?? '', swarm.agents);
+      if (key.upArrow) dispatch({ type: 'mention_cursor_move', delta: -1, max: candidates.length - 1 });
+      if (key.downArrow) dispatch({ type: 'mention_cursor_move', delta: 1, max: candidates.length - 1 });
+      if (key.return && mention) {
+        const pick = candidates[state.mentionCursor];
+        if (pick) {
+          const applied = applyMention(input, input.length, pick === '@all' ? 'all' : pick);
+          setInput(applied.text);
+        }
+      }
+    }
+    // Wizard hotkeys outside Esc/arrows.
+    if (state.mode === 'roster-wizard' && state.rosterRenaming === null) {
+      if (key.upArrow) dispatch({ type: 'wizard_cursor_move', delta: -1 });
+      if (key.downArrow) dispatch({ type: 'wizard_cursor_move', delta: 1 });
+      if (char.toLowerCase() === 'r') {
+        if (state.rosterDraft) setRenameBuffer(state.rosterDraft[state.rosterCursor]?.label ?? '');
+        dispatch({ type: 'rename_start' });
+      }
+      if (key.return) handleWizardSpawn();
     }
   });
 
+  // ─── Submit handler ──────────────────────────────────────────────────────
   const onSubmit = async (value: string) => {
-    if (!value.trim()) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
     setInput('');
-    pushOutput(`> ${value}`);
 
-    // Pending goal confirmation flow
-    if (pendingGoal !== null) {
-      if (/^y(es)?$/i.test(value.trim())) {
-        const result = await runCommand({
-          line: `/start ${pendingGoal}`,
-          cwd,
-          state: swarm,
-          setFocusedAgent,
-          setPendingGoal: () => {},
-          pushOutput,
-          reload: swarm.reload,
-        });
-        setPendingGoal(null);
-        if (result) pushOutput(result);
-        // Reflect new on-disk state immediately so /status etc. work without the 2s poll wait.
-        swarm.reload();
-      } else if (/^n(o)?$/i.test(value.trim())) {
-        pushOutput('Cancelled.');
-        setPendingGoal(null);
-      } else {
-        pushOutput('Please answer y or n.');
-      }
+    // Rename mode in wizard
+    if (state.mode === 'roster-wizard' && state.rosterRenaming !== null) {
+      dispatch({ type: 'rename_commit', newLabel: trimmed });
+      setRenameBuffer('');
       return;
     }
 
-    // Slash command vs free text
-    if (value.startsWith('/')) {
+    // No-swarm: typed text is the goal.
+    if (state.mode === 'no-swarm') {
+      dispatch({ type: 'goal_entered', text: trimmed });
+      return;
+    }
+
+    // Slash command — delegate to the existing dispatcher.
+    if (trimmed.startsWith('/')) {
       const result = await runCommand({
-        line: value,
+        line: trimmed,
         cwd,
         state: swarm,
-        setFocusedAgent,
-        setPendingGoal,
-        pushOutput,
+        setFocusedAgent: () => { /* legacy — pruned in Unit 7 */ },
+        setPendingGoal: () => { /* legacy */ },
+        pushOutput: (line) => dispatch({ type: 'push_output', line }),
         reload: swarm.reload,
       });
-      if (result) pushOutput(result);
-      // Refresh state immediately for commands that mutate the swarm
-      const mutating = /^\/(start|stop|resume|approve|chat|mail)\b/i.test(value);
-      if (mutating) swarm.reload();
-      if (value.trim() === '/quit' || value.trim() === '/exit') exit();
-    } else {
-      // Free-text behavior depends on swarm state
-      if (!swarm.config) {
-        // No active swarm — treat as goal candidate
-        setPendingGoal(value);
-        pushOutput(`Start a new swarm with this goal? (y/n)`);
-        pushOutput(`  "${value}"`);
-      } else {
-        pushOutput(`Use /chat <agent> to message an agent, or /mail <to> <body>. Type /help for commands.`);
+      if (result) dispatch({ type: 'push_output', line: result });
+      if (/^\/(stop|resume|approve|rename)\b/i.test(trimmed)) swarm.reload();
+      if (trimmed === '/quit' || trimmed === '/exit') exit();
+      return;
+    }
+
+    // Active mode: route the message.
+    if (state.mode === 'active' && swarm.config) {
+      const labels = swarm.config.agents.map((a) => a.label);
+      const leading = parseLeadingMention(trimmed, labels);
+      const paths = swarmPaths(swarm.config.workspaceRoot, swarm.config.id);
+      try {
+        if (leading) {
+          sendMail({ paths, from: '@operator', to: leading.to, body: leading.body, type: 'message', knownAgents: swarm.config.agents });
+          dispatch({ type: 'push_output', line: `→ ${leading.to}: ${leading.body}` });
+        } else if (state.chatTarget) {
+          sendMail({ paths, from: '@operator', to: state.chatTarget, body: trimmed, type: 'message', knownAgents: swarm.config.agents });
+          dispatch({ type: 'push_output', line: `→ ${state.chatTarget}: ${trimmed}` });
+        }
+      } catch (err: any) {
+        dispatch({ type: 'push_output', line: `✗ ${err?.message ?? err}` });
       }
     }
   };
 
-  // ─── Slash command suggestions ───
-  // When input starts with /, surface matching commands above the input bar.
-  // Tab autocompletes to the longest common prefix among matches.
-  const slashMatches = useMemo(() => {
-    if (!input.startsWith('/')) return [];
-    const q = input.toLowerCase();
-    return COMMANDS.filter((c) => {
-      // First token of the command spec, e.g. "/start" from "/start <goal>"
-      const head = c.name.split(/\s+/)[0].toLowerCase();
-      return head.startsWith(q);
-    });
-  }, [input]);
-
-  // Tab key → autocomplete to the longest common prefix of matching commands
-  useInput((_input, key) => {
-    if (!key.tab) return;
-    if (!input.startsWith('/') || slashMatches.length === 0) return;
-    const firstTokens = slashMatches.map((c) => c.name.split(/\s+/)[0]);
-    const prefix = longestCommonPrefix(firstTokens);
-    if (prefix.length > input.length) setInput(prefix + ' ');
-    else if (slashMatches.length === 1) setInput(firstTokens[0] + ' ');
-  });
-
-  // ─── Layout calculations ───
+  // ─── Layout ──────────────────────────────────────────────────────────────
   const headerHeight = 1;
   const inputHeight = 1;
   const activityHeight = 6;
-  const popupHeight = slashMatches.length > 0 ? Math.min(slashMatches.length + 2, 8) : 0;
-  const bodyHeight = Math.max(8, rows - headerHeight - inputHeight - activityHeight - popupHeight - 3);
+  const popupExtra = state.mentionOpen ? 8 : 0;
+  const slashExtra = input.startsWith('/') ? 8 : 0;
+  const bodyHeight = Math.max(8, rows - headerHeight - inputHeight - activityHeight - popupExtra - slashExtra - 3);
+
+  const sidebarActive = state.activePane === 'sidebar';
+  const placeholder = state.mode === 'no-swarm'
+    ? 'type a goal to start a swarm'
+    : state.mode === 'roster-wizard' && state.rosterRenaming !== null
+      ? 'new label · Enter to commit · Esc to cancel'
+      : state.chatTarget
+        ? `message to ${state.chatTarget}`
+        : 'type / for commands';
+
+  // While in rename mode, the input bar is repurposed as the rename buffer.
+  const inRenameMode = state.mode === 'roster-wizard' && state.rosterRenaming !== null;
+  const effectiveInput = inRenameMode ? renameBuffer : input;
+  const onEffectiveChange = inRenameMode ? setRenameBuffer : setInput;
 
   return (
     <Box flexDirection="column" width={cols} height={rows}>
       <Header swarm={swarm} rtkOn={rtkOn} />
 
       <Box flexDirection="row" height={bodyHeight}>
-        <Box flexDirection="column" width={Math.min(34, Math.floor(cols * 0.34))} borderStyle="single" borderColor="gray" paddingX={1}>
+        <Box flexDirection="column" width={Math.min(34, Math.floor(cols * 0.34))} borderStyle="single" borderColor={sidebarActive ? 'cyan' : 'gray'} paddingX={1}>
           <AgentsPane
             agents={swarm.agents}
-            focusedLabel={focusedAgent}
-            sidebarCursor={0}
-            sidebarActive={false}
+            focusedLabel={state.chatTarget}
+            sidebarCursor={state.sidebarCursor}
+            sidebarActive={sidebarActive}
           />
         </Box>
         <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor="gray" paddingX={1}>
-          {focusedAgent ? (
-            <TranscriptPane cwd={cwd} swarmId={swarm.config?.id ?? null} agent={focusedAgent} />
+          {state.helpOverlay ? (
+            <HelpOverlay />
+          ) : state.mode === 'roster-wizard' && state.rosterDraft ? (
+            <RosterWizard
+              goal={state.pendingGoal ?? ''}
+              draft={state.rosterDraft}
+              cursor={state.rosterCursor}
+              renamingIndex={state.rosterRenaming}
+              renameBuffer={renameBuffer}
+            />
+          ) : state.mode === 'active' && state.rightPaneView === 'transcript' && state.chatTarget ? (
+            <TranscriptPane cwd={cwd} swarmId={swarm.config?.id ?? null} agent={state.chatTarget} />
           ) : (
-            <BoardPane tasks={swarm.tasks} output={output} />
+            <BoardPane tasks={swarm.tasks} output={state.output} />
           )}
         </Box>
       </Box>
@@ -178,40 +245,18 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
         <ActivityPane events={swarm.activity} max={activityHeight - 2} />
       </Box>
 
-      {slashMatches.length > 0 && (
-        <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-          <Box>
-            <Text dimColor>commands matching </Text>
-            <Text color="cyan" bold>{input}</Text>
-            <Text dimColor>  ·  Tab to complete  ·  Enter to run</Text>
-          </Box>
-          {slashMatches.slice(0, 6).map((c) => (
-            <Box key={c.name}>
-              <Text color="cyan">{c.name.split(/\s+/)[0]}</Text>
-              <Text dimColor>{c.name.slice(c.name.split(/\s+/)[0].length)}</Text>
-              <Text>  </Text>
-              <Text dimColor>{c.help}</Text>
-            </Box>
-          ))}
-        </Box>
-      )}
-
-      <Box flexDirection="row">
-        <Text color="cyan" bold>{'> '}</Text>
-        <TextInput value={input} onChange={setInput} onSubmit={onSubmit} placeholder={pendingGoal ? 'y / n' : 'type a goal or / for commands'} />
-      </Box>
+      <InputBar
+        input={effectiveInput}
+        cursor={effectiveInput.length}
+        onChange={onEffectiveChange}
+        onSubmit={onSubmit}
+        placeholder={placeholder}
+        mentionOpen={state.mentionOpen}
+        mentionToken={mention?.token ?? ''}
+        mentionCursor={state.mentionCursor}
+        agents={swarm.agents}
+        slashOpen={input.startsWith('/')}
+      />
     </Box>
   );
 };
-
-function longestCommonPrefix(strs: string[]): string {
-  if (strs.length === 0) return '';
-  let pref = strs[0];
-  for (const s of strs.slice(1)) {
-    while (!s.startsWith(pref)) {
-      pref = pref.slice(0, -1);
-      if (!pref) return '';
-    }
-  }
-  return pref;
-}
