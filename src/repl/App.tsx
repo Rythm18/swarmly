@@ -67,6 +67,9 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
     if (state.mode !== 'active' && swarm.config) {
       dispatch({ type: 'swarm_detected', config: swarm.config });
     }
+    if (state.mode === 'active' && !swarm.config) {
+      dispatch({ type: 'swarm_stopped' });
+    }
   }, [swarm.config, state.mode]);
 
   // React to roster changes (agent died, was renamed, etc.).

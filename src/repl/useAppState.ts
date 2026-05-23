@@ -39,7 +39,8 @@ export type AppAction =
   | { type: 'mention_open' }
   | { type: 'mention_cursor_move'; delta: number; max: number }
   | { type: 'mention_close' }
-  | { type: 'push_output'; line: string };
+  | { type: 'push_output'; line: string }
+  | { type: 'swarm_stopped' };
 
 export const initialState: AppState = {
   mode: 'no-swarm',
@@ -177,6 +178,17 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     }
     case 'push_output': {
       return { ...state, output: appendOutput(state.output, action.line) };
+    }
+    case 'swarm_stopped': {
+      if (state.mode !== 'active') return state;
+      return {
+        ...state,
+        mode: 'no-swarm',
+        chatTarget: null,
+        rightPaneView: 'board',
+        activePane: 'input',
+        sidebarCursor: 0,
+      };
     }
     default:
       return state;

@@ -240,3 +240,27 @@ describe('appStateReducer — push_output', () => {
     expect(next.output[next.output.length - 1]).toBe('y');
   });
 });
+
+describe('appStateReducer — swarm_stopped', () => {
+  it('moves active → no-swarm and clears chatTarget/right pane', () => {
+    const active = {
+      ...initialState,
+      mode: 'active' as const,
+      chatTarget: 'Coordinator 1',
+      rightPaneView: 'transcript' as const,
+      activePane: 'sidebar' as const,
+      sidebarCursor: 2,
+    };
+    const next = appStateReducer(active, { type: 'swarm_stopped' });
+    expect(next.mode).toBe('no-swarm');
+    expect(next.chatTarget).toBeNull();
+    expect(next.rightPaneView).toBe('board');
+    expect(next.activePane).toBe('input');
+    expect(next.sidebarCursor).toBe(0);
+  });
+
+  it('is a no-op outside active mode', () => {
+    const next = appStateReducer(initialState, { type: 'swarm_stopped' });
+    expect(next).toBe(initialState);
+  });
+});
