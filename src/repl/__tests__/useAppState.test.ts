@@ -44,3 +44,57 @@ describe('appStateReducer — swarm_detected', () => {
     expect(next.rosterDraft).toBeNull();
   });
 });
+
+describe('appStateReducer — wizard navigation', () => {
+  const seeded = {
+    ...initialState,
+    mode: 'roster-wizard' as const,
+    pendingGoal: 'g',
+    rosterDraft: [
+      { label: 'Coordinator 1', role: 'coordinator' as const },
+      { label: 'Builder 1', role: 'builder' as const },
+      { label: 'Builder 2', role: 'builder' as const },
+      { label: 'Reviewer 1', role: 'reviewer' as const },
+    ],
+    rosterCursor: 0,
+    rosterRenaming: null,
+  };
+
+  it('wizard_cursor_move clamps to roster length', () => {
+    expect(appStateReducer(seeded, { type: 'wizard_cursor_move', delta: 1 }).rosterCursor).toBe(1);
+    expect(appStateReducer(seeded, { type: 'wizard_cursor_move', delta: -1 }).rosterCursor).toBe(0);
+    const atEnd = { ...seeded, rosterCursor: 3 };
+    expect(appStateReducer(atEnd, { type: 'wizard_cursor_move', delta: 1 }).rosterCursor).toBe(3);
+  });
+
+  it('rename_start records which row is in rename mode', () => {
+    const next = appStateReducer({ ...seeded, rosterCursor: 1 }, { type: 'rename_start' });
+    expect(next.rosterRenaming).toBe(1);
+  });
+
+  it('rename_cancel clears rosterRenaming and leaves labels untouched', () => {
+    const renaming = { ...seeded, rosterRenaming: 2 };
+    const next = appStateReducer(renaming, { type: 'rename_cancel' });
+    expect(next.rosterRenaming).toBeNull();
+    expect(next.rosterDraft?.[2].label).toBe('Builder 2');
+  });
+
+  it('rename_commit writes the new label and exits rename mode', () => {
+    const renaming = { ...seeded, rosterRenaming: 1 };
+    const next = appStateReducer(renaming, { type: 'rename_commit', newLabel: 'Backend' });
+    expect(next.rosterDraft?.[1].label).toBe('Backend');
+    expect(next.rosterRenaming).toBeNull();
+  });
+
+  it('rename_commit is a no-op when rosterRenaming is null', () => {
+    const next = appStateReducer(seeded, { type: 'rename_commit', newLabel: 'X' });
+    expect(next).toBe(seeded);
+  });
+
+  it('wizard_cancel returns to no-swarm and drops the draft', () => {
+    const next = appStateReducer(seeded, { type: 'wizard_cancel' });
+    expect(next.mode).toBe('no-swarm');
+    expect(next.rosterDraft).toBeNull();
+    expect(next.pendingGoal).toBeNull();
+  });
+});
