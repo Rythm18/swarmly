@@ -200,6 +200,64 @@ export function getStatus(workspaceRoot: string, swarmId?: string): StatusReport
   return { config, agents };
 }
 
+export interface RenameOptions {
+  workspaceRoot: string;
+  swarmId?: string;
+  oldLabel: string;
+  newLabel: string;
+}
+
+/**
+ * Rename a stopped agent. Atomically renames inbox/<old>/, transcripts/<old>.md,
+ * and status/<old>.json, then updates swarm.json + agents.json. Throws if the
+ * agent is currently running (live pidfile) or if the new label collides.
+ */
+export function renameAgent(opts: RenameOptions): void {
+  if (!opts.newLabel || !opts.newLabel.trim()) {
+    throw new Error('New label cannot be empty.');
+  }
+  if (opts.newLabel.includes('/') || opts.newLabel.includes(path.sep)) {
+    throw new Error(`Invalid label "${opts.newLabel}" — must not contain path separators.`);
+  }
+
+  const config = loadConfig(opts.workspaceRoot, opts.swarmId);
+  const paths = swarmPaths(config.workspaceRoot, config.id);
+
+  if (!config.agents.some((a) => a.label === opts.oldLabel)) {
+    throw new Error(`Agent "${opts.oldLabel}" not found in swarm ${config.id}.`);
+  }
+  if (config.agents.some((a) => a.label === opts.newLabel)) {
+    throw new Error(`Label already exists: "${opts.newLabel}".`);
+  }
+
+  const pid = readPid(paths, opts.oldLabel);
+  if (pid && isAlive(pid)) {
+    throw new Error(`Agent "${opts.oldLabel}" is running — /stop it first, then rename.`);
+  }
+  // Stale pidfile — clear it so we leave no orphan.
+  clearPid(paths, opts.oldLabel);
+
+  const inboxFrom = path.join(paths.inboxDir, opts.oldLabel);
+  const inboxTo = path.join(paths.inboxDir, opts.newLabel);
+  const transcriptFrom = path.join(paths.swarmDir, 'transcripts', `${opts.oldLabel}.md`);
+  const transcriptTo = path.join(paths.swarmDir, 'transcripts', `${opts.newLabel}.md`);
+  const statusFrom = path.join(paths.statusDir, `${opts.oldLabel}.json`);
+  const statusTo = path.join(paths.statusDir, `${opts.newLabel}.json`);
+
+  // Best-effort renames. Each target is optional (may not exist yet).
+  if (fs.existsSync(inboxFrom)) fs.renameSync(inboxFrom, inboxTo);
+  if (fs.existsSync(transcriptFrom)) fs.renameSync(transcriptFrom, transcriptTo);
+  if (fs.existsSync(statusFrom)) fs.renameSync(statusFrom, statusTo);
+
+  // Update configs last so a partial filesystem failure doesn't desync them.
+  const updated: SwarmConfig = {
+    ...config,
+    agents: config.agents.map((a) => (a.label === opts.oldLabel ? { ...a, label: opts.newLabel } : a)),
+  };
+  fs.writeFileSync(paths.configFile, JSON.stringify(updated, null, 2));
+  fs.writeFileSync(paths.agentsFile, JSON.stringify(updated.agents, null, 2));
+}
+
 // ─── internals ───────────────────────────────────────────────────────────────
 
 function bootstrapDirs(paths: SwarmPaths): void {
