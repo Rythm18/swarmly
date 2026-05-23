@@ -6,32 +6,26 @@
  * confirmation). Returns a string to push into the output panel, or null.
  */
 
-import { createSwarm, resumeSwarm, stopSwarm, DEFAULT_AGENTS } from '../lib/swarm.js';
+import { resumeSwarm, stopSwarm } from '../lib/swarm.js';
+import { swarmPaths } from '../lib/paths.js';
 import { sendMail } from '../lib/mailbox.js';
-import { findActiveSwarm, swarmPaths } from '../lib/paths.js';
 import type { SwarmState } from './useSwarmState.js';
-import fs from 'node:fs';
 
 export interface CommandCtx {
   line: string;
   cwd: string;
   state: SwarmState;
-  setFocusedAgent: (label: string | null) => void;
-  setPendingGoal: (goal: string | null) => void;
   pushOutput: (line: string) => void;
   /** Force the TUI to re-read swarm state from disk after a mutation. */
   reload: () => void;
 }
 
 export const COMMANDS: { name: string; help: string }[] = [
-  { name: '/start <goal>', help: 'Bootstrap a new swarm in this workspace with the given goal' },
   { name: '/status', help: 'Print current agent statuses' },
-  { name: '/board', help: 'Return the right pane to the task board view' },
-  { name: '/attach <agent>', help: 'Focus the right pane on a specific agent\'s transcript' },
-  { name: '/chat <agent> <text>', help: 'Send a message to an agent as @operator' },
-  { name: '/mail <to> <body>', help: 'Send any agent mail as @operator (alias: /chat)' },
-  { name: '/approve', help: 'Quick-approve: reply "approved" to Coordinator 1' },
+  { name: '/board', help: 'Return the right pane to the board view (or press Esc)' },
   { name: '/agents', help: 'List the roster' },
+  { name: '/rename <old> <new>', help: 'Rename a stopped agent (use /stop first if running)' },
+  { name: '/approve', help: 'Quick-approve: reply "approved" to Coordinator 1' },
   { name: '/resume', help: 'Respawn any dead agents in the active swarm' },
   { name: '/stop', help: 'Tear down the active swarm and uninstall hooks' },
   { name: '/help', help: 'Show this command list' },
@@ -49,20 +43,6 @@ export async function runCommand(ctx: CommandCtx): Promise<string | null> {
     case '/?':
       return COMMANDS.map((c) => `  ${pad(c.name, 28)} ${c.help}`).join('\n');
 
-    case '/start': {
-      if (!rest) return 'Usage: /start <goal description>';
-      try {
-        const { config } = createSwarm({
-          goal: rest,
-          workspaceRoot: ctx.cwd,
-          agents: DEFAULT_AGENTS,
-        });
-        return `✓ Swarm ${config.id} started with ${config.agents.length} agents.`;
-      } catch (err: any) {
-        return `✗ Failed to start: ${err?.message ?? err}`;
-      }
-    }
-
     case '/status': {
       if (!ctx.state.config) return '(no active swarm)';
       const lines = ctx.state.agents.map(
@@ -76,60 +56,34 @@ export async function runCommand(ctx: CommandCtx): Promise<string | null> {
       return ctx.state.config.agents.map((a) => `  • ${a.label} (${a.role})`).join('\n');
 
     case '/board':
-      ctx.setFocusedAgent(null);
       return 'Switched to board view.';
 
-    case '/attach': {
+    case '/rename': {
       if (!ctx.state.config) return '(no active swarm)';
-      const target = rest;
-      if (!target) return 'Usage: /attach <agent>';
-      if (!ctx.state.agents.some((a) => a.label === target)) {
-        return `No agent "${target}". Available: ${ctx.state.agents.map((a) => a.label).join(', ')}`;
+      const sp = rest.split(/\s+/).filter(Boolean);
+      // Allow multi-word old labels by trying longest-match against the roster.
+      const labels = ctx.state.agents.map((a) => a.label);
+      const sorted = [...labels].sort((a, b) => b.length - a.length);
+      let oldLabel: string | null = null;
+      let newLabel: string | null = null;
+      for (const candidate of sorted) {
+        const tokens = candidate.split(/\s+/);
+        if (sp.length > tokens.length && tokens.every((t, i) => sp[i] === t)) {
+          oldLabel = candidate;
+          newLabel = sp.slice(tokens.length).join(' ');
+          break;
+        }
       }
-      ctx.setFocusedAgent(target);
-      return `Focused on ${target}. Type /board to return.`;
-    }
-
-    case '/chat': {
-      if (!ctx.state.config) return '(no active swarm)';
-      const sp = rest.split(/\s+/);
-      const target = sp[0];
-      const body = sp.slice(1).join(' ').trim();
-      if (!target || !body) return 'Usage: /chat <agent> <message>';
-      const paths = swarmPaths(ctx.state.config.workspaceRoot, ctx.state.config.id);
+      if (!oldLabel || !newLabel) return 'Usage: /rename <old agent label> <new label>';
       try {
-        sendMail({
-          paths,
-          from: '@operator',
-          to: target,
-          body,
-          type: 'message',
-          knownAgents: ctx.state.config.agents,
+        const { renameAgent } = await import('../lib/swarm.js');
+        renameAgent({
+          workspaceRoot: ctx.state.config.workspaceRoot,
+          swarmId: ctx.state.config.id,
+          oldLabel,
+          newLabel,
         });
-        ctx.setFocusedAgent(target);
-        return `→ ${target}: ${body}`;
-      } catch (err: any) {
-        return `✗ Failed: ${err?.message ?? err}`;
-      }
-    }
-
-    case '/mail': {
-      if (!ctx.state.config) return '(no active swarm)';
-      const sp = rest.split(/\s+/);
-      const target = sp[0];
-      const body = sp.slice(1).join(' ').trim();
-      if (!target || !body) return 'Usage: /mail <recipient> <body>';
-      const paths = swarmPaths(ctx.state.config.workspaceRoot, ctx.state.config.id);
-      try {
-        sendMail({
-          paths,
-          from: '@operator',
-          to: target,
-          body,
-          type: 'message',
-          knownAgents: ctx.state.config.agents,
-        });
-        return `→ ${target}: ${body}`;
+        return `✓ Renamed "${oldLabel}" → "${newLabel}".`;
       } catch (err: any) {
         return `✗ ${err?.message ?? err}`;
       }
