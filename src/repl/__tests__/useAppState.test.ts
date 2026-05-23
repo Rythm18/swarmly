@@ -161,3 +161,70 @@ describe('appStateReducer — active mode focus + panes', () => {
     ).toBe(false);
   });
 });
+
+describe('appStateReducer — remap chatTarget when focused agent dies or is renamed', () => {
+  const active = {
+    ...initialState,
+    mode: 'active' as const,
+    chatTarget: 'Builder 1',
+    rightPaneView: 'transcript' as const,
+  };
+  it('remaps to first surviving agent if the focused one is gone from roster', () => {
+    const agents = [
+      { label: 'Coordinator 1', role: 'coordinator' as const, status: 'idle' as const },
+      { label: 'Builder 2', role: 'builder' as const, status: 'idle' as const },
+    ];
+    const next = appStateReducer(active, { type: 'agents_changed', agents });
+    expect(next.chatTarget).toBe('Coordinator 1');
+    expect(next.output[next.output.length - 1]).toContain('Builder 1');
+    expect(next.output[next.output.length - 1]).toContain('Coordinator 1');
+  });
+
+  it('remaps to first non-dead agent if the focused one is dead', () => {
+    const agents = [
+      { label: 'Coordinator 1', role: 'coordinator' as const, status: 'idle' as const },
+      { label: 'Builder 1', role: 'builder' as const, status: 'dead' as const },
+    ];
+    const next = appStateReducer(active, { type: 'agents_changed', agents });
+    expect(next.chatTarget).toBe('Coordinator 1');
+  });
+
+  it('is a no-op if the focused agent is still alive', () => {
+    const agents = [
+      { label: 'Builder 1', role: 'builder' as const, status: 'working' as const },
+    ];
+    const next = appStateReducer(active, { type: 'agents_changed', agents });
+    expect(next.chatTarget).toBe('Builder 1');
+  });
+});
+
+describe('appStateReducer — mention picker', () => {
+  const active = { ...initialState, mode: 'active' as const, chatTarget: 'X' };
+  it('mention_open sets mentionOpen + resets cursor', () => {
+    const next = appStateReducer(active, { type: 'mention_open' });
+    expect(next.mentionOpen).toBe(true);
+    expect(next.mentionCursor).toBe(0);
+  });
+
+  it('mention_cursor_move clamps to [0, max]', () => {
+    const open = { ...active, mentionOpen: true, mentionCursor: 0 };
+    expect(appStateReducer(open, { type: 'mention_cursor_move', delta: 1, max: 3 }).mentionCursor).toBe(1);
+    expect(appStateReducer(open, { type: 'mention_cursor_move', delta: -1, max: 3 }).mentionCursor).toBe(0);
+    const atEnd = { ...active, mentionOpen: true, mentionCursor: 3 };
+    expect(appStateReducer(atEnd, { type: 'mention_cursor_move', delta: 1, max: 3 }).mentionCursor).toBe(3);
+  });
+
+  it('mention_close clears mentionOpen', () => {
+    const next = appStateReducer({ ...active, mentionOpen: true }, { type: 'mention_close' });
+    expect(next.mentionOpen).toBe(false);
+  });
+});
+
+describe('appStateReducer — push_output', () => {
+  it('appends to output, keeping the last 100 lines', () => {
+    const long = { ...initialState, output: new Array(100).fill('x') };
+    const next = appStateReducer(long, { type: 'push_output', line: 'y' });
+    expect(next.output.length).toBe(100);
+    expect(next.output[next.output.length - 1]).toBe('y');
+  });
+});

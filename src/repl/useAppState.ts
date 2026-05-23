@@ -34,7 +34,12 @@ export type AppAction =
   | { type: 'sidebar_move'; delta: number; agents: AgentRuntime[] }
   | { type: 'sidebar_commit'; agents: AgentRuntime[] }
   | { type: 'toggle_right_pane' }
-  | { type: 'toggle_help_overlay' };
+  | { type: 'toggle_help_overlay' }
+  | { type: 'agents_changed'; agents: AgentRuntime[] }
+  | { type: 'mention_open' }
+  | { type: 'mention_cursor_move'; delta: number; max: number }
+  | { type: 'mention_close' }
+  | { type: 'push_output'; line: string };
 
 export const initialState: AppState = {
   mode: 'no-swarm',
@@ -144,7 +149,41 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     case 'toggle_help_overlay': {
       return { ...state, helpOverlay: !state.helpOverlay };
     }
+    case 'agents_changed': {
+      if (state.mode !== 'active' || !state.chatTarget) return state;
+      const live = action.agents.filter((a) => a.status !== 'dead');
+      const stillThere = live.find((a) => a.label === state.chatTarget);
+      if (stillThere) return state;
+      const fallback = live[0]?.label ?? null;
+      if (!fallback) return state;
+      const notice = `(${state.chatTarget} is gone — focus moved to ${fallback}.)`;
+      return {
+        ...state,
+        chatTarget: fallback,
+        output: appendOutput(state.output, notice),
+      };
+    }
+    case 'mention_open': {
+      return { ...state, mentionOpen: true, mentionCursor: 0 };
+    }
+    case 'mention_cursor_move': {
+      if (!state.mentionOpen) return state;
+      const next = Math.max(0, Math.min(action.max, state.mentionCursor + action.delta));
+      return { ...state, mentionCursor: next };
+    }
+    case 'mention_close': {
+      if (!state.mentionOpen) return state;
+      return { ...state, mentionOpen: false };
+    }
+    case 'push_output': {
+      return { ...state, output: appendOutput(state.output, action.line) };
+    }
     default:
       return state;
   }
+}
+
+function appendOutput(output: string[], line: string): string[] {
+  const trimmed = output.length >= 100 ? output.slice(output.length - 99) : output;
+  return [...trimmed, line];
 }
