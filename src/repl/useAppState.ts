@@ -28,7 +28,13 @@ export type AppAction =
   | { type: 'rename_start' }
   | { type: 'rename_cancel' }
   | { type: 'rename_commit'; newLabel: string }
-  | { type: 'wizard_cancel' };
+  | { type: 'wizard_cancel' }
+  | { type: 'focus_agent'; index: number; agents: AgentRuntime[] }
+  | { type: 'toggle_pane' }
+  | { type: 'sidebar_move'; delta: number; agents: AgentRuntime[] }
+  | { type: 'sidebar_commit'; agents: AgentRuntime[] }
+  | { type: 'toggle_right_pane' }
+  | { type: 'toggle_help_overlay' };
 
 export const initialState: AppState = {
   mode: 'no-swarm',
@@ -103,6 +109,40 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         rosterCursor: 0,
         rosterRenaming: null,
       };
+    }
+    case 'focus_agent': {
+      if (state.mode !== 'active') return state;
+      const agent = action.agents[action.index];
+      if (!agent) return state;
+      return { ...state, chatTarget: agent.label, rightPaneView: 'transcript' };
+    }
+    case 'toggle_pane': {
+      if (state.mode !== 'active') return state;
+      return { ...state, activePane: state.activePane === 'input' ? 'sidebar' : 'input' };
+    }
+    case 'sidebar_move': {
+      if (state.mode !== 'active') return state;
+      const max = Math.max(0, action.agents.length - 1);
+      const next = Math.max(0, Math.min(max, state.sidebarCursor + action.delta));
+      return { ...state, sidebarCursor: next };
+    }
+    case 'sidebar_commit': {
+      if (state.mode !== 'active') return state;
+      const agent = action.agents[state.sidebarCursor];
+      if (!agent) return state;
+      return {
+        ...state,
+        chatTarget: agent.label,
+        rightPaneView: 'transcript',
+        activePane: 'input',
+      };
+    }
+    case 'toggle_right_pane': {
+      if (state.mode !== 'active') return state;
+      return { ...state, rightPaneView: state.rightPaneView === 'board' ? 'transcript' : 'board' };
+    }
+    case 'toggle_help_overlay': {
+      return { ...state, helpOverlay: !state.helpOverlay };
     }
     default:
       return state;

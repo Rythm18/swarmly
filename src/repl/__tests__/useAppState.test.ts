@@ -98,3 +98,66 @@ describe('appStateReducer — wizard navigation', () => {
     expect(next.pendingGoal).toBeNull();
   });
 });
+
+describe('appStateReducer — active mode focus + panes', () => {
+  const active = {
+    ...initialState,
+    mode: 'active' as const,
+    chatTarget: 'Coordinator 1',
+    rightPaneView: 'transcript' as const,
+    activePane: 'input' as const,
+    sidebarCursor: 0,
+  };
+  const agents = [
+    { label: 'Coordinator 1', role: 'coordinator' as const, status: 'idle' as const },
+    { label: 'Builder 1', role: 'builder' as const, status: 'working' as const },
+    { label: 'Builder 2', role: 'builder' as const, status: 'idle' as const },
+    { label: 'Reviewer 1', role: 'reviewer' as const, status: 'idle' as const },
+  ];
+
+  it('focus_agent sets chatTarget by index and switches right pane to transcript', () => {
+    const next = appStateReducer({ ...active, rightPaneView: 'board' }, { type: 'focus_agent', index: 2, agents });
+    expect(next.chatTarget).toBe('Builder 2');
+    expect(next.rightPaneView).toBe('transcript');
+  });
+
+  it('focus_agent out-of-range is ignored', () => {
+    const next = appStateReducer(active, { type: 'focus_agent', index: 9, agents });
+    expect(next).toBe(active);
+  });
+
+  it('toggle_pane flips activePane', () => {
+    expect(appStateReducer(active, { type: 'toggle_pane' }).activePane).toBe('sidebar');
+    expect(appStateReducer({ ...active, activePane: 'sidebar' }, { type: 'toggle_pane' }).activePane).toBe('input');
+  });
+
+  it('sidebar_move clamps within agents length', () => {
+    const at0 = { ...active, activePane: 'sidebar' as const, sidebarCursor: 0 };
+    expect(appStateReducer(at0, { type: 'sidebar_move', delta: 1, agents }).sidebarCursor).toBe(1);
+    expect(appStateReducer(at0, { type: 'sidebar_move', delta: -1, agents }).sidebarCursor).toBe(0);
+    const atEnd = { ...active, activePane: 'sidebar' as const, sidebarCursor: 3 };
+    expect(appStateReducer(atEnd, { type: 'sidebar_move', delta: 1, agents }).sidebarCursor).toBe(3);
+  });
+
+  it('sidebar_commit copies cursor → chatTarget and returns to input pane', () => {
+    const cursored = { ...active, activePane: 'sidebar' as const, sidebarCursor: 1 };
+    const next = appStateReducer(cursored, { type: 'sidebar_commit', agents });
+    expect(next.chatTarget).toBe('Builder 1');
+    expect(next.activePane).toBe('input');
+    expect(next.rightPaneView).toBe('transcript');
+  });
+
+  it('toggle_right_pane swaps transcript ↔ board', () => {
+    expect(appStateReducer(active, { type: 'toggle_right_pane' }).rightPaneView).toBe('board');
+    expect(
+      appStateReducer({ ...active, rightPaneView: 'board' }, { type: 'toggle_right_pane' }).rightPaneView,
+    ).toBe('transcript');
+  });
+
+  it('toggle_help_overlay flips helpOverlay', () => {
+    expect(appStateReducer(active, { type: 'toggle_help_overlay' }).helpOverlay).toBe(true);
+    expect(
+      appStateReducer({ ...active, helpOverlay: true }, { type: 'toggle_help_overlay' }).helpOverlay,
+    ).toBe(false);
+  });
+});
