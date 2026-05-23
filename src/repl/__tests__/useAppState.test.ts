@@ -264,3 +264,32 @@ describe('appStateReducer — swarm_stopped', () => {
     expect(next).toBe(initialState);
   });
 });
+
+describe('appStateReducer — show_board', () => {
+  it('switches rightPaneView to board when active', () => {
+    const active = {
+      ...initialState,
+      mode: 'active' as const,
+      chatTarget: 'X',
+      rightPaneView: 'transcript' as const,
+    };
+    const next = appStateReducer(active, { type: 'show_board' });
+    expect(next.rightPaneView).toBe('board');
+  });
+
+  it('is a no-op when already on board', () => {
+    const active = {
+      ...initialState,
+      mode: 'active' as const,
+      chatTarget: 'X',
+      rightPaneView: 'board' as const,
+    };
+    const next = appStateReducer(active, { type: 'show_board' });
+    expect(next).toBe(active);
+  });
+
+  it('is a no-op outside active mode', () => {
+    const next = appStateReducer(initialState, { type: 'show_board' });
+    expect(next).toBe(initialState);
+  });
+});

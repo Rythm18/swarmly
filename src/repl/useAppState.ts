@@ -40,7 +40,8 @@ export type AppAction =
   | { type: 'mention_cursor_move'; delta: number; max: number }
   | { type: 'mention_close' }
   | { type: 'push_output'; line: string }
-  | { type: 'swarm_stopped' };
+  | { type: 'swarm_stopped' }
+  | { type: 'show_board' };
 
 export const initialState: AppState = {
   mode: 'no-swarm',
@@ -189,6 +190,10 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         activePane: 'input',
         sidebarCursor: 0,
       };
+    }
+    case 'show_board': {
+      if (state.mode !== 'active' || state.rightPaneView === 'board') return state;
+      return { ...state, rightPaneView: 'board' };
     }
     default:
       return state;

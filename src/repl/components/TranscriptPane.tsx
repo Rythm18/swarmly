@@ -1,5 +1,6 @@
 // src/repl/components/TranscriptPane.tsx
 import React, { useEffect, useState } from 'react';
+import fs from 'node:fs';
 import { Box, Text } from 'ink';
 
 export const TranscriptPane: React.FC<{ cwd: string; swarmId: string | null; agent: string }> = ({ cwd, swarmId, agent }) => {
@@ -9,7 +10,6 @@ export const TranscriptPane: React.FC<{ cwd: string; swarmId: string | null; age
     const fp = `${cwd}/.swarm/${swarmId}/transcripts/${agent}.md`;
     const read = () => {
       try {
-        const fs = require('node:fs') as typeof import('node:fs');
         if (fs.existsSync(fp)) setContent(fs.readFileSync(fp, 'utf8'));
         else setContent('(no transcript yet)');
       } catch { setContent('(error reading transcript)'); }

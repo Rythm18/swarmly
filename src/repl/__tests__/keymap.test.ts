@@ -95,4 +95,10 @@ describe('keymap — help overlay', () => {
     const { char, key } = press('?');
     expect(keyToAction(char, key, 'hi', active, agents)).toBeNull();
   });
+
+  it('Esc closes the help overlay when it is open (wins over toggle_right_pane)', () => {
+    const withOverlay = { ...active, helpOverlay: true };
+    const { char, key } = press('', { escape: true });
+    expect(keyToAction(char, key, '', withOverlay, agents)).toEqual({ type: 'toggle_help_overlay' });
+  });
 });

@@ -30,6 +30,8 @@ export function keyToAction(
 
   // Esc — context-sensitive.
   if (key.escape) {
+    // Help overlay wins over everything: Esc dismisses it.
+    if (state.helpOverlay) return { type: 'toggle_help_overlay' };
     if (state.mode === 'roster-wizard') {
       return state.rosterRenaming !== null ? { type: 'rename_cancel' } : { type: 'wizard_cancel' };
     }

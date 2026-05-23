@@ -103,10 +103,6 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
       swarm.agents,
     );
     if (action) {
-      // Pre-dispatch: rename_start needs to seed the rename buffer with the current label.
-      if (action.type === 'rename_start' && state.rosterDraft) {
-        setRenameBuffer(state.rosterDraft[state.rosterCursor]?.label ?? '');
-      }
       dispatch(action);
     }
     // Mention navigation
@@ -168,6 +164,7 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
       });
       if (result) dispatch({ type: 'push_output', line: result });
       if (/^\/(stop|resume|approve|rename)\b/i.test(trimmed)) swarm.reload();
+      if (trimmed === '/board') dispatch({ type: 'show_board' });
       if (trimmed === '/quit' || trimmed === '/exit') exit();
       return;
     }
