@@ -218,6 +218,18 @@ describe('appStateReducer — mention picker', () => {
     const next = appStateReducer({ ...active, mentionOpen: true }, { type: 'mention_close' });
     expect(next.mentionOpen).toBe(false);
   });
+
+  it('mention_cursor_move is a no-op when picker is closed', () => {
+    const closed = { ...active, mentionOpen: false, mentionCursor: 0 };
+    const next = appStateReducer(closed, { type: 'mention_cursor_move', delta: 1, max: 3 });
+    expect(next).toBe(closed);
+  });
+
+  it('mention_close is a no-op when picker is already closed', () => {
+    const closed = { ...active, mentionOpen: false };
+    const next = appStateReducer(closed, { type: 'mention_close' });
+    expect(next).toBe(closed);
+  });
 });
 
 describe('appStateReducer — push_output', () => {
