@@ -160,8 +160,6 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
         line: trimmed,
         cwd,
         state: swarm,
-        setFocusedAgent: () => { /* legacy — pruned in Unit 7 */ },
-        setPendingGoal: () => { /* legacy */ },
         pushOutput: (line) => dispatch({ type: 'push_output', line }),
         reload: swarm.reload,
       });
