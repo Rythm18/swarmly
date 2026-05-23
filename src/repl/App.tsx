@@ -133,6 +133,10 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
 
   // ─── Submit handler ──────────────────────────────────────────────────────
   const onSubmit = async (value: string) => {
+    // If the mention picker is open, the useInput handler is mid-applying
+    // a mention via Enter. Skip onSubmit so the original text isn't sent.
+    if (state.mentionOpen) return;
+
     const trimmed = value.trim();
     if (!trimmed) return;
     setInput('');
@@ -187,11 +191,19 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
   };
 
   // ─── Layout ──────────────────────────────────────────────────────────────
+  // While in rename mode, the input bar is repurposed as the rename buffer.
+  const inRenameMode = state.mode === 'roster-wizard' && state.rosterRenaming !== null;
+  const effectiveInput = inRenameMode ? renameBuffer : input;
+  const onEffectiveChange = inRenameMode ? setRenameBuffer : setInput;
+
   const headerHeight = 1;
   const inputHeight = 1;
   const activityHeight = 6;
   const popupExtra = state.mentionOpen ? 8 : 0;
-  const slashExtra = input.startsWith('/') ? 8 : 0;
+  // Gate slash popup on the *effective* input and not being in rename mode, so
+  // a stray leading "/" doesn't render the popup above the wizard rename row.
+  const slashOpen = !inRenameMode && effectiveInput.startsWith('/');
+  const slashExtra = slashOpen ? 8 : 0;
   const bodyHeight = Math.max(8, rows - headerHeight - inputHeight - activityHeight - popupExtra - slashExtra - 3);
 
   const sidebarActive = state.activePane === 'sidebar';
@@ -202,11 +214,6 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
       : state.chatTarget
         ? `message to ${state.chatTarget}`
         : 'type / for commands';
-
-  // While in rename mode, the input bar is repurposed as the rename buffer.
-  const inRenameMode = state.mode === 'roster-wizard' && state.rosterRenaming !== null;
-  const effectiveInput = inRenameMode ? renameBuffer : input;
-  const onEffectiveChange = inRenameMode ? setRenameBuffer : setInput;
 
   return (
     <Box flexDirection="column" width={cols} height={rows}>
@@ -255,7 +262,7 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
         mentionToken={mention?.token ?? ''}
         mentionCursor={state.mentionCursor}
         agents={swarm.agents}
-        slashOpen={input.startsWith('/')}
+        slashOpen={slashOpen}
       />
     </Box>
   );
