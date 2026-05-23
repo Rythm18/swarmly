@@ -14,10 +14,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
-import { useSwarmState, type ActivityEvent } from './useSwarmState.js';
+import { useSwarmState } from './useSwarmState.js';
 import { runCommand, COMMANDS } from './commands.js';
 import { rtkAvailable } from './ambient.js';
-import type { AgentRuntime } from '../lib/types.js';
+import { Header } from './components/Header.js';
+import { AgentsPane } from './components/AgentsPane.js';
+import { BoardPane } from './components/BoardPane.js';
+import { TranscriptPane } from './components/TranscriptPane.js';
+import { ActivityPane } from './components/ActivityPane.js';
 
 interface AppProps {
   cwd: string;
@@ -149,11 +153,16 @@ export const App: React.FC<AppProps> = ({ cwd }) => {
 
   return (
     <Box flexDirection="column" width={cols} height={rows}>
-      <Header swarm={swarm} rtkOn={rtkOn} width={cols} />
+      <Header swarm={swarm} rtkOn={rtkOn} />
 
       <Box flexDirection="row" height={bodyHeight}>
         <Box flexDirection="column" width={Math.min(34, Math.floor(cols * 0.34))} borderStyle="single" borderColor="gray" paddingX={1}>
-          <AgentsPane agents={swarm.agents} focused={focusedAgent} />
+          <AgentsPane
+            agents={swarm.agents}
+            focusedLabel={focusedAgent}
+            sidebarCursor={0}
+            sidebarActive={false}
+          />
         </Box>
         <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor="gray" paddingX={1}>
           {focusedAgent ? (
@@ -205,173 +214,4 @@ function longestCommonPrefix(strs: string[]): string {
     }
   }
   return pref;
-}
-
-// ─── Header ────────────────────────────────────────────────────────────────
-
-const Header: React.FC<{ swarm: ReturnType<typeof useSwarmState>; rtkOn: boolean; width: number }> = ({ swarm, rtkOn }) => {
-  const id = swarm.config?.id ?? '(no active swarm)';
-  const counts = swarm.agents.reduce<Record<string, number>>((acc, a) => {
-    acc[a.status] = (acc[a.status] || 0) + 1;
-    return acc;
-  }, {});
-  const summary = Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(' · ') || '—';
-  return (
-    <Box>
-      <Text bold color="cyan">swarmly</Text>
-      <Text>  </Text>
-      <Text color="gray">{id}</Text>
-      <Text>  </Text>
-      <Text color="gray">·</Text>
-      <Text>  </Text>
-      <Text>{summary}</Text>
-      <Text>  </Text>
-      <Text color="gray">·</Text>
-      <Text>  </Text>
-      <Text color={rtkOn ? 'green' : 'gray'}>rtk {rtkOn ? '✓' : '—'}</Text>
-    </Box>
-  );
-};
-
-// ─── Agents pane ───────────────────────────────────────────────────────────
-
-const AgentsPane: React.FC<{ agents: AgentRuntime[]; focused: string | null }> = ({ agents, focused }) => {
-  if (agents.length === 0) {
-    return <Text dimColor>(no agents — /start a swarm to begin)</Text>;
-  }
-  return (
-    <Box flexDirection="column">
-      <Text bold>Agents</Text>
-      {agents.map((a) => {
-        const isFocused = focused === a.label;
-        const dot = statusGlyph(a.status);
-        const time = a.lastSeen ? relativeTime(a.lastSeen) : '—';
-        return (
-          <Box key={a.label}>
-            <Text color={dot.color}>{dot.glyph}</Text>
-            <Text> </Text>
-            <Text bold={isFocused}>{a.label}</Text>
-            <Text dimColor>  {a.role}  </Text>
-            <Text dimColor>{time}</Text>
-          </Box>
-        );
-      })}
-    </Box>
-  );
-};
-
-// ─── Board pane (default right) ────────────────────────────────────────────
-
-const BoardPane: React.FC<{ tasks: ReturnType<typeof useSwarmState>['tasks']; output: string[] }> = ({ tasks, output }) => {
-  return (
-    <Box flexDirection="column">
-      <Text bold>Board</Text>
-      {tasks.length === 0 ? (
-        <Text dimColor>(no tasks yet)</Text>
-      ) : (
-        tasks.map((t) => (
-          <Box key={t.num}>
-            <Text dimColor>T{t.num}</Text>
-            <Text>  </Text>
-            <Text>{t.title}</Text>
-            <Text dimColor>  →  </Text>
-            <Text color={statusToColor(t.status)}>{t.status}</Text>
-          </Box>
-        ))
-      )}
-      <Box marginTop={1} flexDirection="column">
-        <Text dimColor>Output</Text>
-        {output.slice(-8).map((line, i) => (
-          <Text key={i} wrap="truncate">{line}</Text>
-        ))}
-      </Box>
-    </Box>
-  );
-};
-
-// ─── Transcript pane (when an agent is focused) ────────────────────────────
-
-const TranscriptPane: React.FC<{ cwd: string; swarmId: string | null; agent: string }> = ({ cwd, swarmId, agent }) => {
-  const [content, setContent] = useState<string>('');
-  useEffect(() => {
-    if (!swarmId) { setContent(''); return; }
-    const fp = `${cwd}/.swarm/${swarmId}/transcripts/${agent}.md`;
-    const read = () => {
-      try {
-        const fs = require('node:fs') as typeof import('node:fs');
-        if (fs.existsSync(fp)) setContent(fs.readFileSync(fp, 'utf8'));
-        else setContent('(no transcript yet)');
-      } catch { setContent('(error reading transcript)'); }
-    };
-    read();
-    const id = setInterval(read, 2000);
-    return () => { clearInterval(id); };
-  }, [cwd, swarmId, agent]);
-  return (
-    <Box flexDirection="column">
-      <Text bold>{agent}'s transcript</Text>
-      <Text dimColor>(use /board to return to board view)</Text>
-      <Text>{content}</Text>
-    </Box>
-  );
-};
-
-// ─── Activity pane ─────────────────────────────────────────────────────────
-
-const ActivityPane: React.FC<{ events: ActivityEvent[]; max: number }> = ({ events, max }) => {
-  if (events.length === 0) {
-    return <Text dimColor>(no events yet)</Text>;
-  }
-  return (
-    <Box flexDirection="column">
-      {events.slice(0, max).map((e) => (
-        <Box key={e.id}>
-          <Text color={kindColor(e.kind)}>[{e.kind}]</Text>
-          <Text> </Text>
-          <Text wrap="truncate">{e.text}</Text>
-          <Text dimColor>  {relativeTime(e.timestamp)}</Text>
-        </Box>
-      ))}
-    </Box>
-  );
-};
-
-// ─── helpers ───────────────────────────────────────────────────────────────
-
-function statusGlyph(s: AgentRuntime['status']): { glyph: string; color: string } {
-  switch (s) {
-    case 'working': return { glyph: '●', color: 'green' };
-    case 'idle': return { glyph: '○', color: 'blue' };
-    case 'needs-input': return { glyph: '◐', color: 'yellow' };
-    case 'dead': return { glyph: '✗', color: 'red' };
-    case 'spawning': return { glyph: '◌', color: 'gray' };
-    default: return { glyph: '○', color: 'gray' };
-  }
-}
-
-function statusToColor(s: string): string {
-  const v = s.toUpperCase();
-  if (v.includes('DONE')) return 'green';
-  if (v.includes('BUILDING') || v.includes('PLANNING')) return 'yellow';
-  if (v.includes('BLOCKED')) return 'red';
-  if (v.includes('ASSIGNED')) return 'cyan';
-  if (v.includes('PROPOSED')) return 'magenta';
-  return 'gray';
-}
-
-function kindColor(k: ActivityEvent['kind']): string {
-  switch (k) {
-    case 'mail': return 'cyan';
-    case 'status': return 'green';
-    case 'board': return 'yellow';
-    case 'task': return 'magenta';
-    default: return 'gray';
-  }
-}
-
-function relativeTime(ms: number): string {
-  const dt = Date.now() - ms;
-  if (dt < 60_000) return `${Math.round(dt / 1000)}s`;
-  if (dt < 3_600_000) return `${Math.round(dt / 60_000)}m`;
-  return `${Math.round(dt / 3_600_000)}h`;
 }
