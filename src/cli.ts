@@ -29,7 +29,7 @@ const program = new Command();
 program
   .name('swarmly')
   .description('Orchestrate multi-agent Claude Code swarms — open source, filesystem-coordinated, no GUI required.')
-  .version('0.3.3');
+  .version('0.4.0');
 
 // ── start ─────────────────────────────────────────────────────────────────────
 program
